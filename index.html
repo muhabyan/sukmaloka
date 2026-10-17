@@ -1,0 +1,1818 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sukmaloka</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+DW+Pica:ital@0;1&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&display=swap">
+<style>
+/* One dark room lit by one oil lamp, one desk, one book. Always dark, on purpose. */
+:root{
+  --room:#0d0907;
+  --ink:#2b1d14;
+  --ink-soft:#5b4636;
+  --paper:#efe2c6;
+  --serif:"IM Fell English","Iowan Old Style",Georgia,serif;
+  --caps:"IM Fell English SC","IM Fell English",Georgia,serif;
+  --pica:"IM Fell DW Pica","IM Fell English",Georgia,serif;
+  --ease-out:cubic-bezier(.22,1,.36,1);
+  --ease-io:cubic-bezier(.65,0,.35,1);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--room)}
+body{overflow:hidden;font-family:var(--serif);color:var(--ink);-webkit-font-smoothing:antialiased}
+button{font:inherit}
+
+/* ---------- the room: desk and lamplight are painted on canvases, the book sits between them ---------- */
+#deskcv{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+#world{position:fixed;inset:0;transform-origin:50% 50%;z-index:1}
+/* nothing is shown until the book is built and the lamp is lit */
+body:not(.ready) #world,body:not(.ready) #deskhint{visibility:hidden}
+#deskcv{opacity:0;transition:opacity 1.2s var(--ease-out)}body.ready #deskcv{opacity:1}
+#bookwrap{position:absolute;left:50%;top:50%;transition:transform 1s var(--ease-io)}
+#book{position:relative}
+
+/* the book's shadow on the desk: a solid, soft-edged dark shape under the book's footprint, shifted away from
+   the flame by script. (A box-shadow would leave its own area undarkened, which shows as a pale box the
+   moment a page lifts off it.) */
+#bookshadow{position:absolute;top:0;bottom:0;left:1%;right:1%;pointer-events:none;will-change:transform;
+  transition:left .35s var(--ease-io),right .35s var(--ease-io)}
+#bookshadow::before,#bookshadow::after{content:"";position:absolute;border-radius:8px}
+#bookshadow::before{inset:2% -1% -2.5% 0;background:rgba(0,0,0,.42);filter:blur(26px)}
+#bookshadow::after{inset:.6% 0 -.6% .2%;background:rgba(0,0,0,.5);filter:blur(5px)}
+#opener{position:absolute;cursor:pointer;z-index:5;background:none;border:0;padding:0}
+#opener:focus-visible{outline:2px solid rgba(255,230,190,.7);outline-offset:6px;border-radius:4px}
+
+/* page-flip's own layout rules, inlined */
+.stf__parent{position:relative;display:block;box-sizing:border-box;transform:translateZ(0);touch-action:pan-y}
+.sft__wrapper{position:relative;width:100%;box-sizing:border-box}
+.stf__parent canvas{position:absolute;width:100%;height:100%;left:0;top:0}
+.stf__block{position:absolute;width:100%;height:100%;box-sizing:border-box;perspective:2000px}
+/* page-flip injects .stf__item{transform-style:preserve-3d} after our styles; that puts a page's picture and its
+   light layers on one 3D plane, and on a GPU they z-fight (flicker) while a board turns. Keep each page flat. */
+.stf__parent .stf__item{transform-style:flat!important}
+.stf__item{display:none;position:absolute;transform-style:flat;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.page::before,.page::after{backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.stf__outerShadow,.stf__innerShadow,.stf__hardShadow,.stf__hardInnerShadow{position:absolute;left:0;top:0}
+/* the library's board shadows ignore where the light is; ours are cast from the lamp */
+.stf__hardShadow,.stf__hardInnerShadow{display:none!important}
+#castcv{position:absolute;pointer-events:none;z-index:4}
+
+/* ---------- pages ---------- */
+.page{background:var(--paper);overflow:hidden}
+.page img{display:block;width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.page.th canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* lamplight lives on every page itself, so it turns with the paper: shade far from the flame, warmth near it */
+.page{--gut:none}
+.page.l{--gut:linear-gradient(90deg,transparent 88%,rgba(60,35,15,.10) 94%,rgba(40,22,10,.34))}
+.page.r{--gut:linear-gradient(270deg,transparent 88%,rgba(60,35,15,.10) 94%,rgba(40,22,10,.34))}
+.page.hard{--gut:none}
+body.portrait .page.l{--gut:linear-gradient(270deg,transparent 88%,rgba(60,35,15,.10) 94%,rgba(40,22,10,.34))}
+.page::before,.page::after{content:"";position:absolute;inset:0;pointer-events:none}
+.page::before{z-index:4;opacity:var(--dark,1);
+  background:var(--gut),radial-gradient(circle at var(--lx,-700px) var(--ly,-500px),rgba(14,7,4,0) var(--r1,700px),rgba(46,22,10,.22) var(--r2,1200px),rgba(12,6,3,.62) var(--r3,1900px))}
+.page::after{z-index:5;opacity:var(--warm,1);
+  background:radial-gradient(circle at var(--lx,-700px) var(--ly,-500px),rgba(255,186,106,.34) 0,rgba(244,152,80,.13) var(--r1,700px),rgba(244,152,80,0) var(--r2,1200px)),linear-gradient(rgba(255,140,50,.085),rgba(255,140,50,.085))}
+.page.hard::after{background:radial-gradient(ellipse 60% 45% at var(--sx,30%) var(--sy,25%),rgba(255,226,180,.22),rgba(255,226,180,0)),radial-gradient(circle at var(--lx,-700px) var(--ly,-500px),rgba(255,186,106,.24) 0,rgba(244,152,80,.08) var(--r1,700px),rgba(244,152,80,0) var(--r2,1200px))}
+.page.tx{background:var(--paper) center/cover no-repeat}
+/* sizes come from --ph (page height in px), set by script */
+.pp{position:absolute;top:calc(var(--ph)*.075);bottom:calc(var(--ph)*.06);left:11%;right:10%;display:flex;flex-direction:column;color:var(--ink);
+  text-shadow:0 0 .6px rgba(43,29,20,.55)}
+.rh{font-family:var(--caps);font-size:calc(var(--ph)*.0155);letter-spacing:.32em;text-align:center;color:var(--ink-soft);padding-bottom:calc(var(--ph)*.006);border-bottom:1px solid rgba(43,29,20,.35);margin-bottom:calc(var(--ph)*.036)}
+header{text-align:center;margin-bottom:calc(var(--ph)*.026)}
+.num{font-family:var(--caps);font-size:calc(var(--ph)*.022);letter-spacing:.2em;color:var(--ink-soft)}
+h2{font-family:var(--pica);font-weight:400;font-style:italic;font-size:calc(var(--ph)*.044);line-height:1.05;margin:calc(var(--ph)*.005) 0 calc(var(--ph)*.012);letter-spacing:.005em}
+.orn{height:calc(var(--ph)*.02);margin:0 auto;width:42%;background:center/contain no-repeat url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 30'><g fill='none' stroke='%233a2416' stroke-width='1.3' stroke-linecap='round'><path d='M120 15 C108 4 94 4 88 12 C83 19 92 24 97 18 C101 13 94 9 90 13'/><path d='M120 15 C132 4 146 4 152 12 C157 19 148 24 143 18 C139 13 146 9 150 13'/><path d='M88 15 C70 15 60 22 40 15 C30 12 22 13 12 16'/><path d='M152 15 C170 15 180 22 200 15 C210 12 218 13 228 16'/></g><path d='M120 9 L124 15 L120 21 L116 15 Z' fill='%233a2416'/></svg>")}
+.body{flex:1;min-height:0;overflow:hidden;font-size:calc(var(--ph)*var(--fs,.0232));line-height:1.46;text-align:justify;hyphens:auto;-webkit-hyphens:auto}
+.body p{margin:0;text-indent:1.4em}
+.body p.first{text-indent:0}
+.body p.coda{text-indent:0;margin-top:.9em;text-align:center;font-style:italic;color:#3b2a1e}
+.cap{float:left;width:3.05em;height:3.05em;margin:.18em .55em 0 0;position:relative;
+  background:center/contain no-repeat url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 76 76'><rect x='1.5' y='1.5' width='73' height='73' fill='%23e6d2a8' stroke='%233a2416' stroke-width='1.6'/><rect x='6' y='6' width='64' height='64' fill='none' stroke='%233a2416' stroke-width='.8'/><g fill='none' stroke='%235b3a28' stroke-width='1.1'><path d='M10 64 C20 50 14 40 24 32'/><path d='M66 12 C56 26 62 36 52 44'/><path d='M14 54 c4 -2 6 -6 4 -9'/><path d='M62 22 c-4 2 -6 6 -4 9'/></g><g fill='%235b3a28'><circle cx='24' cy='32' r='2'/><circle cx='52' cy='44' r='2'/></g></svg>")}
+.cap b{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--pica);font-weight:400;font-size:2.3em;line-height:1;padding-top:.12em;color:#4a1c14}
+.cap .q{position:absolute;left:.16em;top:.02em;font-family:var(--pica);font-style:normal;font-size:1.25em;line-height:1;color:#4a1c14}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.folio{text-align:center;font-family:var(--serif);font-size:calc(var(--ph)*.017);color:var(--ink-soft);margin-top:calc(var(--ph)*.02);letter-spacing:.1em}
+.folio::before,.folio::after{content:"—";margin:0 .6em;opacity:.6}
+
+/* ---------- controls ---------- */
+#ui{position:fixed;left:0;right:0;bottom:max(14px,env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:center;gap:14px;pointer-events:none;
+  opacity:0;transform:translateY(8px);transition:opacity .6s var(--ease-out),transform .6s var(--ease-out);z-index:10}
+#ui.on{opacity:1;transform:none}
+#ui button{pointer-events:auto;width:40px;height:40px;border-radius:50%;border:1px solid rgba(240,220,190,.25);background:rgba(20,13,9,.82);color:#ead8bb;
+  display:grid;place-items:center;cursor:pointer;transition:transform .16s var(--ease-out),background .2s,border-color .2s}
+#ui button:hover{background:rgba(44,29,20,.92);border-color:rgba(240,220,190,.45)}
+#ui button:active{transform:scale(.94)}
+#ui button:disabled{opacity:.3;cursor:default}
+#ui button:focus-visible{outline:2px solid rgba(255,230,190,.8);outline-offset:2px}
+#ui svg{width:18px;height:18px}
+#hint{min-width:12em;text-align:center;font-family:var(--serif);font-style:italic;font-size:15px;color:rgba(234,216,187,.8);text-shadow:0 1px 3px rgba(0,0,0,.9)}
+/* language switch, top right, quiet like the page controls */
+#lang{position:fixed;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));z-index:30;display:flex;padding:3px;gap:2px;border-radius:999px;
+  background:rgba(20,13,9,.72);border:1px solid rgba(240,220,190,.22);transition:opacity .6s}
+#lang button{font-family:var(--serif);font-size:12.5px;letter-spacing:.14em;min-width:38px;height:28px;padding:0 9px;border-radius:999px;border:0;background:none;color:rgba(234,216,187,.6);cursor:pointer}
+#lang button[aria-pressed="true"]{background:rgba(234,216,187,.16);color:#f3e4c8}
+#lang button:hover{color:#f3e4c8}
+#lang button:focus-visible{outline:2px solid rgba(255,230,190,.8);outline-offset:1px}
+body:not(.ready) #lang,body.diving #lang{opacity:0;pointer-events:none}
+#deskhint{position:fixed;left:0;right:0;bottom:max(28px,env(safe-area-inset-bottom));text-align:center;font-style:italic;font-size:17px;color:rgba(240,224,196,.85);
+  text-shadow:0 1px 4px rgba(0,0,0,.95);pointer-events:none;transition:opacity .6s;z-index:6;letter-spacing:.02em}
+#deskhint small{display:block;font-size:13px;opacity:.65;margin-top:4px;font-style:normal;font-family:var(--caps);letter-spacing:.2em}
+
+/* ---------- ending ---------- */
+/* cursors: over the book, an engraved hand pointing (fingertip is the hotspot), pinching the paper while pressed; none while we dive; at the end the
+   reader's pointer is the white light itself, drawn on the ending canvas */
+:root{--hand:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2238%22 height=%2238%22 viewBox=%220 0 48 48%22%3E%3Cg transform=%22rotate(-14 13 2.5)%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M10 5.5C10 3.6 11.3 2.5 13 2.5C14.7 2.5 16 3.6 16 5.5L16 17C16.5 16 18 15.5 19.5 16C21 16.4 21.6 17.6 21.4 18.8C22.2 18 23.8 17.9 25 18.6C26 19.3 26.2 20.5 25.8 21.6C26.8 21.2 28.2 21.6 28.8 22.8C29.4 24 29 25.3 28 26C28.6 28.5 28.5 31 27.6 33.5L19 35.5C17 34.5 15.2 33 14.2 31C12.5 30 9 28.5 7.2 26.6C6 25.3 6.2 23.6 7.6 23C9 22.4 10.4 23.2 11.6 24.2C10.8 22 10 20 10 17.5Z%22 fill=%22none%22 stroke=%22rgba(255,246,228,.85)%22 stroke-width=%223.2%22/%3E%3Cpath d=%22M18.5 35 28 33 29.5 40 20 42.5Z%22 fill=%22none%22 stroke=%22rgba(255,246,228,.85)%22 stroke-width=%223.2%22/%3E%3Cpath d=%22M10 5.5C10 3.6 11.3 2.5 13 2.5C14.7 2.5 16 3.6 16 5.5L16 17C16.5 16 18 15.5 19.5 16C21 16.4 21.6 17.6 21.4 18.8C22.2 18 23.8 17.9 25 18.6C26 19.3 26.2 20.5 25.8 21.6C26.8 21.2 28.2 21.6 28.8 22.8C29.4 24 29 25.3 28 26C28.6 28.5 28.5 31 27.6 33.5L19 35.5C17 34.5 15.2 33 14.2 31C12.5 30 9 28.5 7.2 26.6C6 25.3 6.2 23.6 7.6 23C9 22.4 10.4 23.2 11.6 24.2C10.8 22 10 20 10 17.5Z%22 fill=%22%23f1e4c8%22 stroke=%22%232b1d14%22 stroke-width=%221.15%22/%3E%3Cg fill=%22none%22 stroke=%22%232b1d14%22 stroke-width=%22.75%22%3E%3Cpath d=%22M11.4 5.8C12.2 7.1 13.8 7.1 14.6 5.8%22/%3E%3Cpath d=%22M10.6 14.6C12 15 14 15 15.6 14.6%22/%3E%3Cpath d=%22M16.2 21C18.6 21.8 22 22.5 25.4 22.3%22/%3E%3Cpath d=%22M16.6 24.5C19.6 25.5 23.6 26 27.6 25.7%22/%3E%3Cpath d=%22M12.2 26.4C13.6 27.6 15 28.2 16.6 28.4%22/%3E%3C/g%3E%3Cg stroke=%22%235b4636%22 stroke-width=%22.45%22 opacity=%22.7%22%3E%3Cpath d=%22M17 29.5 26.8 28.2M17.6 31.6 27 30.4M18 33.4 26.6 32.4%22/%3E%3C/g%3E%3Cpath d=%22M18.5 35 28 33 29.5 40 20 42.5Z%22 fill=%22%23fbf6ea%22 stroke=%22%232b1d14%22 stroke-width=%221.1%22/%3E%3Cpath d=%22M19.4 37.2 28.6 35.2%22 stroke=%22%232b1d14%22 stroke-width=%22.6%22 fill=%22none%22 stroke-dasharray=%221.2 1%22/%3E%3C/g%3E%3C/svg%3E") 10 2;--grab:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2238%22 height=%2238%22 viewBox=%220 0 48 48%22%3E%3Cg transform=%22translate(2 6)%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M-1 22.4 7.6 13.2 10.6 16.2 2.2 25Z%22 fill=%22%23efe3c6%22 stroke=%22%232b1d14%22 stroke-width=%22.9%22/%3E%3Cpath d=%22M8 14C8.5 11 10.5 8.5 13.5 7.6C16.5 6.8 19.5 7.6 21.5 9.5C22.6 8.6 24.6 8.6 25.8 9.8C27 9.3 28.8 9.8 29.6 11.2C30.8 11 32.2 12 32.4 13.6C33.2 16.5 33 20 31.8 23L30 31L20 32C18.5 29 17 26 14.5 24C12.5 22.5 10.5 21 9.5 19.5C8.6 18 8.2 16 8 14Z%22 fill=%22none%22 stroke=%22rgba(255,246,228,.85)%22 stroke-width=%223.2%22/%3E%3Cpath d=%22M19.6 31.6 30.2 30.6 31 37.4 20.4 38.6Z%22 fill=%22none%22 stroke=%22rgba(255,246,228,.85)%22 stroke-width=%223.2%22/%3E%3Cpath d=%22M8 14C8.5 11 10.5 8.5 13.5 7.6C16.5 6.8 19.5 7.6 21.5 9.5C22.6 8.6 24.6 8.6 25.8 9.8C27 9.3 28.8 9.8 29.6 11.2C30.8 11 32.2 12 32.4 13.6C33.2 16.5 33 20 31.8 23L30 31L20 32C18.5 29 17 26 14.5 24C12.5 22.5 10.5 21 9.5 19.5C8.6 18 8.2 16 8 14Z%22 fill=%22%23f1e4c8%22 stroke=%22%232b1d14%22 stroke-width=%221.15%22/%3E%3Cg fill=%22none%22 stroke=%22%232b1d14%22 stroke-width=%22.75%22%3E%3Cpath d=%22M8.7 14.5C11 13.3 14 12.7 17 13.1%22/%3E%3Cpath d=%22M9.3 16.8C10.5 16.4 11.3 15.5 11.3 14.4%22/%3E%3Cpath d=%22M17 13.1C21 13.3 25 13.7 29.2 14.3%22/%3E%3Cpath d=%22M17.6 17.2C21.6 17.8 26 18.2 30.8 18.5%22/%3E%3Cpath d=%22M21.5 9.5C21.8 10.8 21.8 12 21.4 13.2M25.8 9.8C26.1 11.2 26 12.4 25.6 13.6%22/%3E%3C/g%3E%3Cg stroke=%22%235b4636%22 stroke-width=%22.45%22 opacity=%22.7%22%3E%3Cpath d=%22M19 22.5 30.4 21.8M19.8 25 30 24.4M20.6 27.4 29.6 26.9%22/%3E%3C/g%3E%3Cpath d=%22M19.6 31.6 30.2 30.6 31 37.4 20.4 38.6Z%22 fill=%22%23fbf6ea%22 stroke=%22%232b1d14%22 stroke-width=%221.1%22/%3E%3Cpath d=%22M20.4 33.8 30.4 32.8%22 stroke=%22%232b1d14%22 stroke-width=%22.6%22 fill=%22none%22 stroke-dasharray=%221.2 1%22/%3E%3C/g%3E%3C/svg%3E") 8 16}
+#bookwrap,#bookwrap *,#opener{cursor:var(--hand),pointer!important}
+body.grab #bookwrap,body.grab #bookwrap *{cursor:var(--grab),grabbing!important}
+body.diving,body.diving *{cursor:none!important}
+#end,#end *{cursor:none!important}
+#soul{position:fixed;left:0;top:0;width:76px;height:76px;margin:-38px 0 0 -38px;z-index:40;pointer-events:none;opacity:0;mix-blend-mode:screen;will-change:transform,opacity;
+  background:radial-gradient(circle,rgba(255,255,253,1) 0,rgba(255,254,247,.95) 5%,rgba(255,250,236,.55) 13%,rgba(255,244,222,.2) 32%,rgba(255,240,215,0) 70%)}
+#end{position:fixed;inset:0;z-index:20;visibility:hidden;background:#d9dbe6;overflow:hidden}
+#end.on{visibility:visible}
+#endcv,#endgl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#timehint,#timeword{position:absolute;left:0;right:0;text-align:center;font-family:var(--serif);font-style:italic;color:#fff8ec;text-shadow:0 1px 10px rgba(20,24,50,.6);pointer-events:none;opacity:0;transition:opacity 1.2s}
+#timehint{bottom:calc(max(36px,env(safe-area-inset-bottom)) + 58px);font-size:14px;letter-spacing:.04em}
+#timeword{top:auto;bottom:calc(max(36px,env(safe-area-inset-bottom)) + 84px);font-size:clamp(18px,2vw,24px);letter-spacing:.12em;font-variant:small-caps;transition:opacity .5s}
+#timehint.on,#timeword.on{opacity:1}
+#endtxt{position:absolute;left:7vw;top:16vh;text-align:left;max-width:min(46vw,640px);color:#fff8ec;text-shadow:0 2px 18px rgba(30,30,60,.55),0 1px 2px rgba(0,0,0,.35);padding:0 16px;pointer-events:none}
+#endtxt h1{font-family:var(--pica);font-weight:400;font-size:clamp(44px,9vw,108px);margin:0;letter-spacing:.01em;opacity:0;position:relative}
+/* the white light catches the letters it passes over: a brighter copy of the word, revealed only around the light */
+#endtxt h1{color:#efe5d2}
+#endtxt h1::after{content:attr(data-t);position:absolute;inset:0;color:#fffefa;opacity:var(--la,0);
+  text-shadow:0 0 6px rgba(255,255,248,1),0 0 18px rgba(255,244,214,.95),0 0 40px rgba(255,232,190,.65),0 0 80px rgba(255,226,180,.35);
+  -webkit-mask-image:radial-gradient(circle 120px at var(--lx,-999px) var(--ly,-999px),#000 0,rgba(0,0,0,.55) 45%,transparent 100%);
+  mask-image:radial-gradient(circle 120px at var(--lx,-999px) var(--ly,-999px),#000 0,rgba(0,0,0,.55) 45%,transparent 100%)}
+#endtxt p{font-family:var(--serif);font-style:italic;font-size:clamp(15px,1.7vw,20px);line-height:1.6;max-width:30em;margin:14px 0 0;opacity:0}
+#again{position:absolute;left:50%;bottom:max(36px,env(safe-area-inset-bottom));transform:translateX(-50%);opacity:0;border:1px solid rgba(255,248,236,.6);color:#fff8ec;background:rgba(30,34,60,.4);
+  padding:10px 22px;border-radius:999px;font-family:var(--caps);letter-spacing:.2em;font-size:13px;cursor:pointer;transition:background .2s;pointer-events:none}
+#again.on{pointer-events:auto}
+#again:hover{background:rgba(30,34,60,.6)}
+#again:focus-visible{outline:2px solid #fff;outline-offset:3px}
+@media (max-aspect-ratio:1/1){#endtxt{left:0;right:0;top:9vh;max-width:none;text-align:center}#endtxt p{margin:12px auto 0}}
+@media (prefers-reduced-motion:reduce){#bookwrap{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="deskcv" aria-hidden="true"></canvas>
+<div id="world">
+  <div id="bookwrap">
+    <div id="bookshadow"></div>
+    <div id="book">
+<div class="page hard cover" data-density="hard"><img alt="Sampul: Sukmaloka" data-k="cover" src="assets/pg_cover.webp"></div>
+<div class="page img l hard" data-density="hard"><img alt="" data-k="inside" src="assets/pg_inside.webp"></div>
+<div class="page img r"><img alt="Halaman judul: Sukmaloka, atau Perihal Berat Sebuah Jiwa" data-k="title" src="assets/pg_title.webp"></div>
+<div class="page tx l" data-n="1"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">I</div><h2>Bintang yang Sama</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>D</b></span><span class="sr">D</span>i Sukmaloka, kota yang melayang di atas lautan awan, senja tiba lebih dulu di atap-atap tertinggi. Di sanalah Suluh dan Kejora duduk setiap sore, di antara cerobong yang masih hangat.</p><p class="">Mereka punya satu aturan. Siapa yang pertama melihat bintang senja harus mengatakan satu hal yang jujur. Kejora selalu menang. Ia selalu menengadah, sementara Suluh sibuk menghitung lampu jalan yang belum dinyalakan.</p><p class="">Guru Suluh, Tuan Gaharu, Kepala Serikat Pemantik, suatu sore ikut duduk bersama mereka. “Itu juga bintang fajar,” katanya, menunjuk bintang yang sama. “Ia terbit saat senja dan saat fajar. Satu bintang, dua nama.”</p><p class="">Kejora tertawa sampai batuk. “Mana mungkin satu bintang ada di dua tempat?”</p><p class="">Gaharu hanya tersenyum. “Tunggu sampai kau cukup jauh untuk melihatnya.”</p></div>
+  <div class="folio">1</div>
+</div></div>
+<div class="page th r" data-scene="1" data-title="Bintang yang Sama" data-num="I"><canvas aria-label="Panggung teater kertas: Bintang yang Sama"></canvas></div>
+<div class="page tx l" data-n="2"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">II</div><h2>Kompas Kembar</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>A</b></span><span class="sr">A</span>yah Kejora, Pak Nadi, membuat jam untuk seluruh kota. Kejora membuat hal-hal yang tidak diminta siapa pun.</p><p class="">Suatu malam ia menyerahkan sebuah kompas kuningan seukuran kancing. “Tiup kacanya,” katanya. Suluh meniupnya. Kejora meniup kompas kembarannya sendiri, dan kedua jarum langsung berbalik, saling menunjuk.</p><p class="">Untuk membuktikannya, Kejora menaruh kompasnya di laci, lalu berlari mengelilingi atap. Jarum di tangan Suluh tidak menunjuk ke laci. Jarum itu mengikuti Kejora.</p><p class="">“Kompasnya cuma kuningan,” kata Kejora, terengah. “Yang ditunjuk itu napasnya. Ke mana pun aku pergi, jarummu akan menemukanku.”</p><p class="">Malam itu mereka menyepakati sandi. Tiga kedipan lentera dari atap ke atap artinya <em>aku di sini</em>. Dua kedipan artinya <em>pulanglah</em>. Mereka tidak pernah membuat sandi untuk <em>selamat tinggal</em>. Kata Kejora, sandi itu tak akan pernah dipakai.</p></div>
+  <div class="folio">2</div>
+</div></div>
+<div class="page th r" data-scene="2" data-title="Kompas Kembar" data-num="II"><canvas aria-label="Panggung teater kertas: Kompas Kembar"></canvas></div>
+<div class="page tx l" data-n="3"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">III</div><h2>Pengantaran</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>D</b></span><span class="sr">D</span>i Sukmaloka, kematian datang dengan langkah yang sopan. Begitu seseorang berpulang, Serikat Pemantik mengetuk pintu membawa lentera perak yang tutupnya terkunci.</p><p class="">Suluh pernah ikut, sebagai murid yang memegang tangga. Ia melihat Tuan Gaharu berlutut di samping tempat tidur dan membisikkan doa yang sama untuk setiap orang: “Ringanlah, dan naiklah.”</p><p class="">Lentera perak itu datang dalam keadaan gelap. Saat dibawa pulang ke menara, ia menyala.</p><p class="">“Kenapa cahayanya ikut mereka?” tanya Kejora malam itu di atap. “Bukannya seharusnya ikut orang yang meninggal?”</p><p class="">Suluh tak tahu jawabannya. Ia hanya tahu larangan pertama yang diajarkan kepada setiap murid: <em>jangan pernah membuka tutup lentera perak.</em></p></div>
+  <div class="folio">3</div>
+</div></div>
+<div class="page th r" data-scene="3" data-title="Pengantaran" data-num="III"><canvas aria-label="Panggung teater kertas: Pengantaran"></canvas></div>
+<div class="page tx l" data-n="4"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">IV</div><h2>Kawat ke Bawah Awan</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>D</b></span><span class="sr">D</span>i Sukmaloka tak ada yang menengok ke bawah. Di bawah awan, kata para guru, hanya ada air hitam yang dulu menenggelamkan dunia lama.</p><p class="">Kejora tetap menengok. Selama tiga bulan ia menyambung kawat jam bekas ayahnya, gulung demi gulung, sampai cukup panjang untuk menjulur dari ujung dermaga. Sambil menunggu, ia mencatat garis awan di tiang dermaga setiap minggu. Tak ada yang pernah memintanya.</p><p class="">Mereka menurunkan toples berpemberat saat semua orang tidur. Kawat itu turun dan terus turun, lalu berhenti, seperti menyentuh sesuatu.</p><p class="">Toples itu naik kembali basah dan hangat. Di dalamnya ada segenggam tanah hitam dan sebutir biji.</p><p class="">“Bisa saja itu biji tua,” kata Suluh. “Dari tiga ratus tahun lalu.”</p><p class="">“Bisa saja,” kata Kejora. Ia menanamnya di pot berisi jelaga. Biji itu tak pernah tumbuh.</p></div>
+  <div class="folio">4</div>
+</div></div>
+<div class="page th r" data-scene="4" data-title="Kawat ke Bawah Awan" data-num="IV"><canvas aria-label="Panggung teater kertas: Kawat ke Bawah Awan"></canvas></div>
+<div class="page tx l" data-n="5"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">V</div><h2>Musim Batuk</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>M</b></span><span class="sr">M</span>usim dingin membawa jelaga turun ke lorong-lorong. Anak-anak cerobong mulai batuk, seperti setiap tahun, dan seperti setiap tahun, sebagian dari mereka tak sampai ke musim semi.</p><p class="">Kejora batuk paling keras. Untuk pertama kalinya ia kalah menemukan bintang.</p><p class="">“Hal yang jujur,” katanya pelan. “Aku takut. Tapi aku juga penasaran.”</p><p class="">Ia meminta ayahnya memasang ranjangnya di atas timbangan besar dari bengkel, dan setiap malam ia mencatat beratnya sendiri. “Kalau jiwa itu ada,” katanya, “timbangan ini akan tahu.”</p><p class="">Lalu ia meletakkan biji itu di telapak tangan Suluh dan menutup jari-jarinya.</p><p class="">“Kalau aku pergi lebih dulu, jangan biarkan mereka memasukkanku ke lentera. Aku mau turun. Aku mau melihat apa yang tumbuh di bawah sana.”</p><p class="">Suluh berjanji, padahal ia belum mengerti apa yang sedang ia janjikan.</p></div>
+  <div class="folio">5</div>
+</div></div>
+<div class="page th r" data-scene="5" data-title="Musim Batuk" data-num="V"><canvas aria-label="Panggung teater kertas: Musim Batuk"></canvas></div>
+<div class="page tx l" data-n="6"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">VI</div><h2>Dua Puluh Satu Gram</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>K</b></span><span class="sr">K</span>ejora pergi pada suatu senja, tepat saat bintang pertama muncul. Tak ada yang melihatnya duluan.</p><p class="">Pak Nadi duduk di samping ranjang sepanjang sore, menatap jarum timbangan karena tak sanggup menatap anaknya. Karena itu ia melihatnya: tepat saat napas terakhir Kejora keluar, jarum itu bergeser ke kiri. Sedikit sekali. Selebar rambut.</p><p class="">Ia mencatatnya di buku Kejora, di bawah tulisan tangan anaknya sendiri, dengan tangan yang gemetar. <em>Dua puluh satu gram.</em></p><p class="">Di atas dada Kejora, setitik cahaya menggantung. Tidak naik, tidak turun, seperti menunggu fajar. Suluh menatapnya, lalu menatap jendela. Satu dorongan saja, dan ia bisa menepati janjinya.</p><p class="">Ketukan sopan terdengar di pintu sebelum ia sempat bergerak. Tuan Gaharu masuk membawa lentera perak yang gelap.</p><p class="">“Minggir, Nak,” kata gurunya lembut. Suluh minggir.</p><p class="">Lentera itu keluar dari rumah dalam keadaan menyala.</p></div>
+  <div class="folio">6</div>
+</div></div>
+<div class="page th r" data-scene="6" data-title="Dua Puluh Satu Gram" data-num="VI"><canvas aria-label="Panggung teater kertas: Dua Puluh Satu Gram"></canvas></div>
+<div class="page tx l" data-n="7"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">VII</div><h2>Jarum yang Menunjuk ke Atas</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>M</b></span><span class="sr">M</span>ereka memakamkan Kejora di taman batu di pinggir kota. Suluh membuka kompasnya, berharap jarumnya menunjuk ke makam.</p><p class="">Jarum itu menunjuk ke atas.</p><p class="">Ia berjalan ke kiri, lalu ke kanan, lalu mengelilingi taman. Jarum itu tetap menunjuk ke satu arah: kubah Menara Lentera Agung, yang selalu menyala dan tak pernah padam.</p><p class="">Malam itu Pak Nadi menyerahkan buku catatan anaknya kepada Suluh. Di halaman-halaman terakhir ada catatan garis awan. <em>Naik setiap tahun</em>, tulis Kejora. <em>Satu jengkal, lalu dua, lalu tiga. Makin cepat. Kota ini sedang tenggelam, dan tak ada yang mau mengukurnya.</em> Di bawahnya, tulisan tangan Pak Nadi: <em>dua puluh satu gram.</em></p><p class="">Suluh mengambil kunci menara dari kait di dinding gurunya.</p></div>
+  <div class="folio">7</div>
+</div></div>
+<div class="page th r" data-scene="7" data-title="Jarum yang Menunjuk ke Atas" data-num="VII"><canvas aria-label="Panggung teater kertas: Jarum yang Menunjuk ke Atas"></canvas></div>
+<div class="page tx l" data-n="8"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">VIII</div><h2>Arsip</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>M</b></span><span class="sr">M</span>enara itu lebih tinggi dari dalam ketimbang dari luar. Suluh menaiki tangga melingkar melewati roda gigi sebesar rumah, sampai tiba di ruangan yang dindingnya penuh buku besar.</p><p class="">Ia membuka satu secara acak. Nama, tanggal, nomor sel, dua puluh satu gram. Nama berikutnya, tanggal berikutnya, dua puluh satu gram. Tiga ratus tahun.</p><p class="">Di buku paling awal, para pendiri kota menulis dengan tenang. Jiwa itu ringan, dan karena ringan, jiwa selalu naik. Satu jiwa tak berarti apa-apa. Kumpulkan cukup banyak di satu tempat, dan kau bisa mengangkat sebuah kota keluar dari air.</p><p class="">Di rak paling bawah ada buku lain: catatan garis awan milik Serikat sendiri. Angkanya sama dengan angka Kejora. Mereka sudah tahu, sejak lama.</p><p class="">Suluh akhirnya mengerti asal nama Sukmaloka, dunia para jiwa. Para pendiri kota hanya menulis apa adanya.</p></div>
+  <div class="folio">8</div>
+</div></div>
+<div class="page th r" data-scene="8" data-title="Arsip" data-num="VIII"><canvas aria-label="Panggung teater kertas: Arsip"></canvas></div>
+<div class="page tx l" data-n="9"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">IX</div><h2>Jantung Menara</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>K</b></span><span class="sr">K</span>ubah di puncak menara adalah sarang lebah dari kaca: ribuan sel kecil, masing-masing berpelat nama, masing-masing berisi satu cahaya. Sebagian terang. Sebagian tinggal bara. Sebagian begitu redup sampai Suluh harus menyipitkan mata.</p><p class="">Kompasnya bergetar, lalu menunjuk ke satu sel di dekat lantai. Pelatnya masih baru.</p><p class="">Suluh mengangkat lenteranya dan mengedipkannya tiga kali. <em>Aku di sini.</em></p><p class="">Lama sekali tak ada yang terjadi. Lalu cahaya di dalam sel itu berkedip. Satu. Dua. Tiga.</p><p class="">Suluh menempelkan telapak tangannya ke kaca yang dingin. Ia tidak menangis waktu pemakaman. Ia menangis sekarang.</p></div>
+  <div class="folio">9</div>
+</div></div>
+<div class="page th r" data-scene="9" data-title="Jantung Menara" data-num="IX"><canvas aria-label="Panggung teater kertas: Jantung Menara"></canvas></div>
+<div class="page tx l" data-n="10"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">X</div><h2>Harga</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><i class="q">“</i><b>K</b></span><span class="sr">“K</span>au tidak seharusnya di sini.” Tuan Gaharu berdiri di ambang pintu, tanpa marah, hanya lelah.</p><p class="">Ia tidak menyangkal apa pun. Jiwa-jiwa di kubah itu tidak beristirahat; mereka habis terbakar menjadi daya angkat kota. Setiap tahun ada yang padam, dan setiap tahun kota butuh yang baru. Itu sebabnya obat untuk batuk jelaga tak pernah dicari.</p><p class="">“Kejora,” kata Suluh.</p><p class="">“Ada sepuluh ribu orang di bawah kita,” kata Gaharu. “Kalau cahaya ini berhenti, mereka semua jatuh ke air hitam. Aku memilih sepuluh ribu itu, setiap tahun, selama tiga puluh tahun. Kau pikir aku tidur nyenyak?”</p><p class="">Ia mengambil kunci dari tangan muridnya dan mengantarnya turun, tanpa kekerasan. Di pintu menara, Suluh menyodorkan satu hal terakhir: buku catatan Kejora.</p><p class="">“Ukur sendiri,” katanya.</p></div>
+  <div class="folio">10</div>
+</div></div>
+<div class="page th r" data-scene="10" data-title="Harga" data-num="X"><canvas aria-label="Panggung teater kertas: Harga"></canvas></div>
+<div class="page tx l" data-n="11"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">XI</div><h2>Wangi</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>G</b></span><span class="sr">G</span>aharu membaca buku itu sampai lewat tengah malam, berdampingan dengan arsip garis awan milik Serikat. Lalu ia turun ke dermaga sendirian, membawa lentera, dan berdiri di depan tiang yang sudah ia lewati setiap hari selama tiga puluh tahun tanpa sekali pun menunduk.</p><p class="">Ia mencari takik yang ia ukir sendiri saat masih murid. Takik itu sudah tenggelam di bawah kabut. Jarak antartakik sesudahnya makin lebar dari tahun ke tahun, persis seperti dalam angka Kejora. Kota ini tidak turun pelan-pelan. Kota ini turun makin cepat.</p><p class="">Pengorbanan yang ia jaga tidak menyelamatkan kota. Pengorbanan itu hanya membeli waktu, dan setiap tahun waktunya makin mahal.</p><p class="">Menjelang subuh ia naik ke kubah, ke sel yang ia kunjungi setiap malam sejak istrinya, Wangi, meninggal. Cahaya di dalamnya tinggal setitik, nyaris tak lagi berdenyut.</p><p class="">Selama dua puluh tahun ia percaya sedang menjaganya. Malam ini, dengan angka-angka itu di tangannya, ia tak bisa lagi berpura-pura.</p><p class="">Pagi harinya, ia mengetuk pintu bengkel jam dan menyerahkan kunci perak kepada muridnya. “Bantu aku menurunkan kota ini,” katanya, “selagi masih ada cukup cahaya untuk turun pelan-pelan.”</p></div>
+  <div class="folio">11</div>
+</div></div>
+<div class="page th r" data-scene="11" data-title="Wangi" data-num="XI"><canvas aria-label="Panggung teater kertas: Wangi"></canvas></div>
+<div class="page tx l" data-n="12"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">XII</div><h2>Membuka Kubah</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>M</b></span><span class="sr">M</span>alam itu, untuk pertama kalinya dalam tiga ratus tahun, pintu menara dibuka untuk siapa saja. Warga kota menaiki tangga melingkar dan berdiri di depan dinding sel kaca, membaca pelat-pelat nama. Seorang lelaki tua menemukan ibunya. Seorang ibu menemukan anak laki-lakinya, yang meninggal karena batuk musim dingin lalu.</p><p class="">Tidak semua ingin turun. Ada yang berteriak bahwa di bawah hanya ada kematian. Ada yang menuduh Gaharu gila. Ibu itu memeluk sel anaknya dan tidak mau melepaskannya.</p><p class="">Gaharu tidak memaksa. Ia membacakan angka-angka Kejora keras-keras: kota ini akan menyentuh awan juga, sepuluh tahun lagi, atau dua puluh. Pilihannya hanya turun sekarang selagi bisa dikendalikan, atau terus membayar dengan anak-anak mereka sampai cahayanya habis. Tak ada yang menjawab.</p><p class="">Lalu Suluh berjalan ke sel dengan pelat nama paling baru, dan memutar kunci perak. Cahaya Kejora keluar, berputar sekali di depan wajahnya, lalu naik.</p><p class="">Setelah itu tak ada lagi yang menunggu suara terbanyak. Tiap keluarga memutuskan untuk orangnya sendiri. Sel-sel tua yang tak punya keluarga lagi dibuka Gaharu satu per satu, pelan, supaya kota turun dan tidak jatuh. Sampai subuh, sebagian warga tetap menentang, dan sebagian sel tetap tertutup. Sel anak itu salah satunya.</p></div>
+  <div class="folio">12</div>
+</div></div>
+<div class="page th r" data-scene="12" data-title="Membuka Kubah" data-num="XII"><canvas aria-label="Panggung teater kertas: Membuka Kubah"></canvas></div>
+<div class="page tx l" data-n="13"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">XIII</div><h2>Menembus Awan</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>S</b></span><span class="sr">S</span>ukmaloka turun sepanjang hari.</p><p class="">Awan menelan atap-atap tertinggi lebih dulu, lalu cerobong, lalu jendela. Dunia jadi kelabu dan basah, tanpa atas dan tanpa bawah. Seseorang menangis, lalu seseorang bernyanyi, dan tangis itu berhenti.</p><p class="">Di kubah, ibu itu masih memeluk sel terakhir yang tertutup. Saat kabut masuk lewat celah kaca, ia membuka tutupnya sendiri.</p><p class="">Suluh berdiri di ujung dermaga dengan kompas di tangannya. Jarumnya berputar liar sejak ia memutar kunci itu, mencari dan terus mencari. Lalu berhenti, dan menunjuk lurus ke atas, menembus awan, ke tempat yang tak akan bisa ia jangkau lagi.</p><p class="">Dulu ia kehilangan Kejora karena tak sanggup berkata tidak. Kali ini ia melepaskannya dengan tangannya sendiri, dan rasanya jauh lebih berat.</p></div>
+  <div class="folio">13</div>
+</div></div>
+<div class="page th r" data-scene="13" data-title="Menembus Awan" data-num="XIII"><canvas aria-label="Panggung teater kertas: Menembus Awan"></canvas></div>
+<div class="page tx l" data-n="14"><div class="pp">
+  <div class="rh">Sukmaloka</div>
+  <header><div class="num">XIV</div><h2>Fajar</h2><div class="orn"></div></header>
+  <div class="body"><p class="first"><span class="cap" aria-hidden="true"><b>S</b></span><span class="sr">S</span>ukmaloka menyentuh tanah dengan bunyi yang pelan, seperti orang tua yang akhirnya duduk.</p><p class="">Masih gelap. Masih dingin. Tak ada yang tahu apakah tanah ini bisa ditanami, apakah airnya bisa diminum, apakah tiga ratus tahun cukup untuk menyembuhkan dunia lama.</p><p class="">Suluh berlutut di rumput basah dan menggali lubang kecil dengan jarinya. Saat itu langit timur memucat, dan satu bintang terang terbit mendahului matahari.</p><p class="">Jarum kompasnya bergeser pelan, lalu berhenti tepat di bintang itu.</p><p class="">“Satu bintang, dua nama,” bisik Suluh. Ia akhirnya cukup jauh untuk melihatnya.</p><p class="">Ia menanam biji itu.</p><p class="coda"><em>Dua puluh satu gram. Cukup ringan untuk naik ke langit, cukup berat untuk menahan sebuah kota selama tiga ratus tahun.</em></p></div>
+  <div class="folio">14</div>
+</div></div>
+<div class="page th r" data-scene="14" data-title="Fajar" data-num="XIV"><canvas aria-label="Panggung teater kertas: Fajar"></canvas></div>
+<div class="page img l"><img alt="Kolofon" data-k="colophon" src="assets/pg_colophon.webp"></div>
+<div class="page img r hard" data-density="hard"><img alt="" data-k="insideb" src="assets/pg_insideb.webp"></div>
+<div class="page hard back" data-density="hard"><img alt="Sampul belakang" data-k="back" src="assets/pg_back.webp"></div>
+    </div>
+    <button id="opener" type="button" aria-label="Buka buku"></button>
+  </div>
+</div>
+<div id="deskhint"><span id="deskhint-t">Ketuk buku untuk membukanya</span><small>Sukmaloka</small></div>
+<div id="lang" role="group" aria-label="Bahasa / Language"><button type="button" data-l="id" aria-pressed="true" lang="id">ID</button><button type="button" data-l="en" aria-pressed="false" lang="en">EN</button></div>
+<div id="ui">
+  <button id="prev" type="button" aria-label="Halaman sebelumnya"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 4 6.5 10l6 6"/></svg></button>
+  <span id="hint" aria-live="polite"></span>
+  <button id="next" type="button" aria-label="Halaman berikutnya"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 4l6 6-6 6"/></svg></button>
+  <button id="snd" type="button" aria-label="Matikan suara" aria-pressed="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8h3l4-3.5v11l-4-3.5h-3z"/><path class="w" d="M13.5 7.2a4 4 0 0 1 0 5.6M15.6 5.2a7 7 0 0 1 0 9.6"/></svg></button>
+</div>
+<div id="end" aria-hidden="true">
+  <canvas id="endgl" aria-hidden="true"></canvas>
+  <canvas id="endcv" role="img" aria-label="Jatuh menembus awan ke kota Sukmaloka yang telah mendarat saat fajar"></canvas>
+  <div id="endtxt"><h1 data-t="Sukmaloka">Sukmaloka</h1><p>Dua puluh satu gram. Cukup ringan untuk naik ke langit, cukup berat untuk menahan sebuah kota selama tiga ratus tahun.</p></div>
+  <div id="timeword" aria-live="polite"></div><div id="timehint"></div>
+  <button id="again" type="button">Baca lagi</button>
+</div>
+<div id="soul" aria-hidden="true"></div>
+
+<script src="page-flip.js"></script>
+<script>
+(()=>{
+'use strict';
+const ASSET={"board": "assets/board.webp", "cloud3": "assets/cloud3.webp", "desk": "assets/desk.webp", "end_aerial": "assets/end_aerial.webp", "end_mask": "assets/end_mask.png", "gaharu_body": "assets/gaharu_body.webp", "gaharu_head": "assets/gaharu_head.webp", "gaharu_lower": "assets/gaharu_lower.webp", "gaharu_prop_key": "assets/gaharu_prop_key.webp", "gaharu_prop_staff": "assets/gaharu_prop_staff.webp", "gaharu_upper": "assets/gaharu_upper.webp", "hr_malam": "assets/hr_malam.webp", "hr_pagi": "assets/hr_pagi.webp", "hr_siang": "assets/hr_siang.webp", "hr_sore": "assets/hr_sore.webp", "kejora_body": "assets/kejora_body.webp", "kejora_head": "assets/kejora_head.webp", "kejora_lower": "assets/kejora_lower.webp", "kejora_prop_satchel": "assets/kejora_prop_satchel.webp", "kejora_scarf": "assets/kejora_scarf.webp", "kejora_upper": "assets/kejora_upper.webp", "mb_box": "assets/mb_box.webp", "mb_key": "assets/mb_key.webp", "mb_pin": "assets/mb_pin.webp", "nadi_body": "assets/nadi_body.webp", "nadi_head": "assets/nadi_head.webp", "nadi_lower": "assets/nadi_lower.webp", "nadi_prop_driver": "assets/nadi_prop_driver.webp", "nadi_prop_watch": "assets/nadi_prop_watch.webp", "nadi_upper": "assets/nadi_upper.webp", "paper": "assets/paper.webp", "pg_colophon_en": "assets/pg_colophon_en.webp", "pg_cover_en": "assets/pg_cover_en.webp", "pg_inside_en": "assets/pg_inside_en.webp", "pg_title_en": "assets/pg_title_en.webp", "s_click": "assets/s_click.mp3", "s_close": "assets/s_close.mp3", "s_creak": "assets/s_creak.mp3", "s_flip1": "assets/s_flip1.mp3", "s_flip10": "assets/s_flip10.mp3", "s_flip2": "assets/s_flip2.mp3", "s_flip3": "assets/s_flip3.mp3", "s_flip4": "assets/s_flip4.mp3", "s_flip5": "assets/s_flip5.mp3", "s_flip6": "assets/s_flip6.mp3", "s_flip7": "assets/s_flip7.mp3", "s_flip8": "assets/s_flip8.mp3", "s_flip9": "assets/s_flip9.mp3", "s_latch": "assets/s_latch.mp3", "s_musicbox": "assets/s_musicbox.mp3", "s_open": "assets/s_open.mp3", "s_place": "assets/s_place.mp3", "sc_bed": "assets/sc_bed.webp", "sc_bookcase": "assets/sc_bookcase.webp", "sc_chest": "assets/sc_chest.webp", "sc_chim1": "assets/sc_chim1.webp", "sc_chim2": "assets/sc_chim2.webp", "sc_chim3": "assets/sc_chim3.webp", "sc_city": "assets/sc_city.webp", "sc_cloudA": "assets/sc_cloudA.webp", "sc_cloudB": "assets/sc_cloudB.webp", "sc_compass": "assets/sc_compass.webp", "sc_curtain": "assets/sc_curtain.webp", "sc_dock": "assets/sc_dock.webp", "sc_door": "assets/sc_door.webp", "sc_frame": "assets/sc_frame.webp", "sc_gearL": "assets/sc_gearL.webp", "sc_gearS": "assets/sc_gearS.webp", "sc_grave1": "assets/sc_grave1.webp", "sc_grave2": "assets/sc_grave2.webp", "sc_grave3": "assets/sc_grave3.webp", "sc_hillA": "assets/sc_hillA.webp", "sc_hillB": "assets/sc_hillB.webp", "sc_house": "assets/sc_house.webp", "sc_jar": "assets/sc_jar.webp", "sc_lamp1": "assets/sc_lamp1.webp", "sc_lamp2": "assets/sc_lamp2.webp", "sc_needle": "assets/sc_needle.webp", "sc_roofL": "assets/sc_roofL.webp", "sc_roofS": "assets/sc_roofS.webp", "sc_scale": "assets/sc_scale.webp", "sc_sky": "assets/sc_sky.webp", "sc_smoke": "assets/sc_smoke.webp", "sc_sprout": "assets/sc_sprout.webp", "sc_stair": "assets/sc_stair.webp", "sc_tower": "assets/sc_tower.webp", "sc_valance": "assets/sc_valance.webp", "sc_window": "assets/sc_window.webp", "suluh_body": "assets/suluh_body.webp", "suluh_head": "assets/suluh_head.webp", "suluh_lower": "assets/suluh_lower.webp", "suluh_prop_lantern": "assets/suluh_prop_lantern.webp", "suluh_prop_pole": "assets/suluh_prop_pole.webp", "suluh_upper": "assets/suluh_upper.webp", "wisp": "assets/wisp.webp", "x_baker": "assets/x_baker.webp", "x_girl": "assets/x_girl.webp", "x_mother": "assets/x_mother.webp", "x_oldman": "assets/x_oldman.webp", "x_pemantik1": "assets/x_pemantik1.webp", "x_pemantik2": "assets/x_pemantik2.webp", "x_stout": "assets/x_stout.webp", "x_youngmother": "assets/x_youngmother.webp"};
+const EN_ED={"pages": {"1": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">I</div><h2>The Same Star</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>I</b></span><span class=\"sr\">I</span>n Sukmaloka, the city that floats above a sea of clouds, dusk reaches the highest roofs first. That is where Suluh and Kejora sat every evening, among chimneys still warm from the day.</p><p class=\"\">They had one rule. Whoever saw the evening star first had to say one true thing. Kejora always won. She was always looking up, while Suluh was busy counting the street lamps no one had lit yet.</p><p class=\"\">One evening Suluh\u2019s teacher, Master Gaharu, Head of the Lamplighters\u2019 Guild, sat down with them. \u201cThat is the morning star as well,\u201d he said, pointing at the same star. \u201cIt rises at dusk and at dawn. One star, two names.\u201d</p><p class=\"\">Kejora laughed until she coughed. \u201cHow can one star be in two places?\u201d</p><p class=\"\">Gaharu only smiled. \u201cWait until you are far enough away to see it.\u201d</p></div>\n  <div class=\"folio\">1</div>\n", "2": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">II</div><h2>Twin Compasses</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>K</b></span><span class=\"sr\">K</span>ejora\u2019s father, Mr. Nadi, made the clocks for the whole city. Kejora made things nobody had asked for.</p><p class=\"\">One night she handed Suluh a brass compass the size of a button. \u201cBreathe on the glass,\u201d she said. Suluh breathed on it. Kejora breathed on its twin, and both needles swung round at once to point at each other.</p><p class=\"\">To prove it, Kejora put her compass in a drawer and ran around the roof. The needle in Suluh\u2019s hand did not point at the drawer. It followed Kejora.</p><p class=\"\">\u201cThe compass is only brass,\u201d Kejora said, out of breath. \u201cIt points at the breath. Wherever I go, your needle will find me.\u201d</p><p class=\"\">That night they agreed on a code. Three blinks of a lantern from roof to roof meant <em>I am here</em>. Two blinks meant <em>come home</em>. They never made a code for <em>goodbye</em>. Kejora said it would never be needed.</p></div>\n  <div class=\"folio\">2</div>\n", "3": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">III</div><h2>The Escort</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>I</b></span><span class=\"sr\">I</span>n Sukmaloka, death arrives with polite footsteps. The moment someone passes, the Lamplighters\u2019 Guild knocks at the door carrying a silver lantern with its lid locked shut.</p><p class=\"\">Suluh went along once, as the apprentice who held the ladder. He watched Master Gaharu kneel beside the bed and whisper the same prayer he whispered for everyone: \u201cBe light, and rise.\u201d</p><p class=\"\">The silver lantern arrived dark. When it was carried home to the tower, it was lit.</p><p class=\"\">\u201cWhy does the light go with them?\u201d Kejora asked that night on the roof. \u201cShouldn\u2019t it go with the one who died?\u201d</p><p class=\"\">Suluh didn\u2019t know. He only knew the first rule taught to every apprentice: <em>never open the lid of a silver lantern.</em></p></div>\n  <div class=\"folio\">3</div>\n", "4": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">IV</div><h2>A Wire Below the Clouds</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>I</b></span><span class=\"sr\">I</span>n Sukmaloka nobody looks down. Below the clouds, the teachers say, there is only the black water that drowned the old world.</p><p class=\"\">Kejora looked anyway. For three months she spliced her father\u2019s old clock wire, coil after coil, until it was long enough to hang from the end of the dock. While she waited, she marked the cloud line on the dock post every week. No one had ever asked her to.</p><p class=\"\">They lowered a weighted jar while everyone slept. The wire went down and kept going down, then stopped, as if it had touched something.</p><p class=\"\">The jar came back up wet and warm. Inside was a handful of black earth and a single seed.</p><p class=\"\">\u201cIt could be an old seed,\u201d said Suluh. \u201cFrom three hundred years ago.\u201d</p><p class=\"\">\u201cIt could,\u201d said Kejora. She planted it in a pot of soot. It never grew.</p></div>\n  <div class=\"folio\">4</div>\n", "5": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">V</div><h2>Coughing Season</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>W</b></span><span class=\"sr\">W</span>inter brought the soot down into the alleys. The chimney children began to cough, as they did every year, and as every year, some of them did not live to see spring.</p><p class=\"\">Kejora coughed the hardest. For the first time, she lost at finding the star.</p><p class=\"\">\u201cA true thing,\u201d she said quietly. \u201cI\u2019m afraid. But I\u2019m curious too.\u201d</p><p class=\"\">She asked her father to set her bed on the big scale from the workshop, and every night she wrote down her own weight. \u201cIf there is such a thing as a soul,\u201d she said, \u201cthis scale will know.\u201d</p><p class=\"\">Then she laid the seed in Suluh\u2019s palm and closed his fingers over it.</p><p class=\"\">\u201cIf I go first, don\u2019t let them put me in a lantern. I want to go down. I want to see what grows down there.\u201d</p><p class=\"\">Suluh promised, though he did not yet understand what he was promising.</p></div>\n  <div class=\"folio\">5</div>\n", "6": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">VI</div><h2>Twenty-One Grams</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>K</b></span><span class=\"sr\">K</span>ejora went one evening, just as the first star appeared. Nobody saw it first.</p><p class=\"\">Mr. Nadi sat beside the bed all afternoon, watching the needle of the scale because he could not bear to watch his daughter. That is why he saw it: the moment Kejora\u2019s last breath left her, the needle moved to the left. Only a little. The width of a hair.</p><p class=\"\">He wrote it in Kejora\u2019s notebook, beneath his daughter\u2019s own handwriting, with a shaking hand. <em>Twenty-one grams.</em></p><p class=\"\">Above Kejora\u2019s chest, a speck of light hung in the air. Not rising, not falling, as if it were waiting for dawn. Suluh looked at it, then at the window. One push, and he could keep his promise.</p><p class=\"\">A polite knock came at the door before he could move. Master Gaharu came in carrying a dark silver lantern.</p><p class=\"\">\u201cStand aside, boy,\u201d his teacher said gently. Suluh stood aside.</p><p class=\"\">The lantern left the house lit.</p></div>\n  <div class=\"folio\">6</div>\n", "7": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">VII</div><h2>The Needle That Points Up</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>T</b></span><span class=\"sr\">T</span>hey buried Kejora in the stone garden at the edge of the city. Suluh opened his compass, hoping the needle would point to the grave.</p><p class=\"\">The needle pointed up.</p><p class=\"\">He walked to the left, then to the right, then all the way around the garden. The needle kept pointing the same way: at the dome of the Great Lantern Tower, which was always lit and never went out.</p><p class=\"\">That night Mr. Nadi gave Suluh his daughter\u2019s notebook. On its last pages were her records of the cloud line. <em>Higher every year</em>, Kejora had written. <em>One hand, then two, then three. Faster and faster. This city is sinking, and nobody wants to measure it.</em> Beneath it, in Mr. Nadi\u2019s hand: <em>twenty-one grams.</em></p><p class=\"\">Suluh took the tower key from the hook on his teacher\u2019s wall.</p></div>\n  <div class=\"folio\">7</div>\n", "8": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">VIII</div><h2>The Archive</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>T</b></span><span class=\"sr\">T</span>he tower was taller on the inside than on the outside. Suluh climbed the winding stair past gears the size of houses, until he reached a room whose walls were lined with great ledgers.</p><p class=\"\">He opened one at random. A name, a date, a cell number, twenty-one grams. The next name, the next date, twenty-one grams. Three hundred years of them.</p><p class=\"\">In the oldest ledger, the founders of the city wrote calmly. A soul is light, and because it is light, a soul always rises. One soul is nothing. Gather enough of them in one place, and you can lift a city out of the water.</p><p class=\"\">On the bottom shelf was another book: the Guild\u2019s own record of the cloud line. Its numbers were the same as Kejora\u2019s. They had known, for a long time.</p><p class=\"\">At last Suluh understood where the name Sukmaloka came from: the world of souls. The founders had only written down what it was.</p></div>\n  <div class=\"folio\">8</div>\n", "9": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">IX</div><h2>The Heart of the Tower</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>T</b></span><span class=\"sr\">T</span>he dome at the top of the tower was a honeycomb of glass: thousands of small cells, each with a nameplate, each holding a single light. Some were bright. Some were embers. Some were so faint that Suluh had to squint.</p><p class=\"\">His compass trembled, then pointed at one cell near the floor. Its nameplate was still new.</p><p class=\"\">Suluh raised his lantern and blinked it three times. <em>I am here.</em></p><p class=\"\">For a long time nothing happened. Then the light inside the cell blinked. One. Two. Three.</p><p class=\"\">Suluh pressed his palm against the cold glass. He had not cried at the funeral. He cried now.</p></div>\n  <div class=\"folio\">9</div>\n", "10": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">X</div><h2>The Price</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><i class=\"q\">\u201c</i><b>Y</b></span><span class=\"sr\">\u201cY</span>ou should not be here.\u201d Master Gaharu stood in the doorway, not angry, only tired.</p><p class=\"\">He denied nothing. The souls in the dome did not rest; they burned away into the city\u2019s lift. Every year some went out, and every year the city needed new ones. That was why no one had ever looked for a cure for the soot cough.</p><p class=\"\">\u201cKejora,\u201d said Suluh.</p><p class=\"\">\u201cThere are ten thousand people beneath us,\u201d said Gaharu. \u201cIf this light stops, they all fall into the black water. I have chosen those ten thousand, every year, for thirty years. Do you think I sleep well?\u201d</p><p class=\"\">He took the key from his apprentice\u2019s hand and walked him down, without force. At the tower door, Suluh held out one last thing: Kejora\u2019s notebook.</p><p class=\"\">\u201cMeasure it yourself,\u201d he said.</p></div>\n  <div class=\"folio\">10</div>\n", "11": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">XI</div><h2>Wangi</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>G</b></span><span class=\"sr\">G</span>aharu read the notebook until long past midnight, side by side with the Guild\u2019s own archive of the cloud line. Then he went down to the dock alone, carrying a lantern, and stood before the post he had walked past every day for thirty years without once looking down.</p><p class=\"\">He searched for the notch he had carved himself as an apprentice. It was already drowned beneath the mist. The gaps between the notches after it grew wider year by year, exactly as in Kejora\u2019s numbers. The city was not sinking slowly. It was sinking faster and faster.</p><p class=\"\">The sacrifice he guarded had not saved the city. It had only bought time, and every year the time cost more.</p><p class=\"\">Before dawn he climbed to the dome, to the cell he had visited every night since his wife, Wangi, died. The light inside was down to a speck, barely pulsing anymore.</p><p class=\"\">For twenty years he had believed he was keeping her safe. Tonight, with those numbers in his hands, he could no longer pretend.</p><p class=\"\">In the morning he knocked at the door of the clock workshop and gave the silver key to his apprentice. \u201cHelp me bring this city down,\u201d he said, \u201cwhile there is still enough light to go down slowly.\u201d</p></div>\n  <div class=\"folio\">11</div>\n", "12": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">XII</div><h2>Opening the Dome</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>T</b></span><span class=\"sr\">T</span>hat night, for the first time in three hundred years, the tower door was opened to anyone. The people of the city climbed the winding stair and stood before the wall of glass cells, reading the nameplates. An old man found his mother. A mother found her son, who had died of the cough last winter.</p><p class=\"\">Not everyone wanted to go down. Some shouted that below there was only death. Some called Gaharu mad. The mother wrapped her arms around her son\u2019s cell and would not let go.</p><p class=\"\">Gaharu did not force anyone. He read Kejora\u2019s numbers aloud: the city would touch the clouds anyway, in ten years, or twenty. The only choice was to go down now while it could still be steered, or to keep paying with their children until the light ran out. No one answered.</p><p class=\"\">Then Suluh walked to the cell with the newest nameplate and turned the silver key. Kejora\u2019s light came out, circled once before his face, and rose.</p><p class=\"\">After that, no one waited for a vote. Each family decided for its own. The old cells with no family left, Gaharu opened one by one, slowly, so that the city would descend and not fall. By dawn some people still refused, and some cells stayed shut. The son\u2019s cell was one of them.</p></div>\n  <div class=\"folio\">12</div>\n", "13": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">XIII</div><h2>Through the Clouds</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>S</b></span><span class=\"sr\">S</span>ukmaloka came down all day long.</p><p class=\"\">The clouds swallowed the highest roofs first, then the chimneys, then the windows. The world turned grey and wet, with no up and no down. Someone cried, then someone sang, and the crying stopped.</p><p class=\"\">In the dome, the mother still held the last closed cell. When the mist crept in through the gaps in the glass, she opened the lid herself.</p><p class=\"\">Suluh stood at the end of the dock with the compass in his hand. Its needle had spun wildly since he turned the key, searching and searching. Then it stopped, and pointed straight up, through the clouds, to a place he could never reach again.</p><p class=\"\">Once he had lost Kejora because he could not say no. This time he let her go with his own hands, and it was far heavier.</p></div>\n  <div class=\"folio\">13</div>\n", "14": "\n  <div class=\"rh\">Sukmaloka</div>\n  <header><div class=\"num\">XIV</div><h2>Dawn</h2><div class=\"orn\"></div></header>\n  <div class=\"body\"><p class=\"first\"><span class=\"cap\" aria-hidden=\"true\"><b>S</b></span><span class=\"sr\">S</span>ukmaloka touched the ground with a soft sound, like an old man finally sitting down.</p><p class=\"\">It was still dark. Still cold. No one knew whether this ground could be planted, whether its water could be drunk, whether three hundred years were enough to heal the old world.</p><p class=\"\">Suluh knelt in the wet grass and dug a small hole with his fingers. Just then the eastern sky paled, and one bright star rose ahead of the sun.</p><p class=\"\">The needle of his compass moved slowly, then came to rest on that star.</p><p class=\"\">\u201cOne star, two names,\u201d Suluh whispered. He was finally far enough away to see it.</p><p class=\"\">He planted the seed.</p><p class=\"coda\"><em>Twenty-one grams. Light enough to rise to the sky, heavy enough to hold up a city for three hundred years.</em></p></div>\n  <div class=\"folio\">14</div>\n"}, "titles": {"1": "The Same Star", "2": "Twin Compasses", "3": "The Escort", "4": "A Wire Below the Clouds", "5": "Coughing Season", "6": "Twenty-One Grams", "7": "The Needle That Points Up", "8": "The Archive", "9": "The Heart of the Tower", "10": "The Price", "11": "Wangi", "12": "Opening the Dome", "13": "Through the Clouds", "14": "Dawn"}};
+const CHARS={"suluh": {"h": 1.0, "H": 559.1999999999999, "W": 162.6, "parts": {"body": {"x": 2, "y": 2, "w": 158, "h": 555, "z": 1, "parent": null, "pivot": null}, "head": {"x": 48, "y": 15, "w": 108, "h": 115, "z": 5, "parent": "body", "pivot": [94.97399999999999, 119.94599999999997]}, "upper": {"x": 57, "y": 141, "w": 63, "h": 125, "z": 4, "parent": "body", "pivot": [83.92316430474362, 141.83055596046944]}, "lower": {"x": 89, "y": 233, "w": 63, "h": 172, "z": 3, "parent": "upper", "pivot": [102.96, 229.38]}}, "marks": [[109.2, 266.4]], "props": {"pole": {"w": 86, "h": 538}, "lantern": {"w": 57, "h": 133}}}, "kejora": {"h": 0.93, "H": 540.6, "W": 373.2, "parts": {"body": {"x": 37, "y": 110, "w": 270, "h": 428, "z": 1, "parent": null, "pivot": null}, "head": {"x": 159, "y": 4, "w": 123, "h": 156, "z": 5, "parent": "body", "pivot": [219.6, 123.6]}, "upper": {"x": 172, "y": 131, "w": 76, "h": 106, "z": 3, "parent": "body", "pivot": [198.0, 141.0]}, "lower": {"x": 247, "y": 170, "w": 117, "h": 64, "z": 4, "parent": "upper", "pivot": [244.79999999999998, 223.79999999999998]}, "scarf": {"x": 5, "y": 115, "w": 220, "h": 124, "z": 2, "parent": "body", "pivot": [219.0816, 151.92]}}, "marks": [[198.29999999999998, 141.9], [146.7, 217.79999999999998], [216.0, 386.4], [117.6, 390.59999999999997]], "props": {"satchel": {"w": 121, "h": 135}}}, "gaharu": {"h": 1.28, "H": 583.8, "W": 273.0, "parts": {"body": {"x": 2, "y": 2, "w": 269, "h": 579, "z": 1, "parent": null, "pivot": null}, "head": {"x": 120, "y": 12, "w": 80, "h": 120, "z": 5, "parent": "body", "pivot": [152.7815904588174, 116.07224165170241]}, "upper": {"x": 83, "y": 84, "w": 56, "h": 189, "z": 4, "parent": "body", "pivot": [118.8, 111.6]}, "lower": {"x": 95, "y": 207, "w": 65, "h": 138, "z": 3, "parent": "upper", "pivot": [108.26380737193996, 219.62878896322164]}}, "marks": [], "props": {"staff": {"w": 70, "h": 552}, "key": {"w": 38, "h": 184}}}, "nadi": {"h": 1.18, "H": 578.4, "W": 208.79999999999998, "parts": {"body": {"x": 2, "y": 117, "w": 204, "h": 459, "z": 1, "parent": null, "pivot": null}, "head": {"x": 25, "y": 3, "w": 124, "h": 152, "z": 5, "parent": "body", "pivot": [120.0, 121.19999999999999]}, "upper": {"x": 27, "y": 118, "w": 77, "h": 166, "z": 4, "parent": "body", "pivot": [57.0, 157.2]}, "lower": {"x": 46, "y": 220, "w": 142, "h": 94, "z": 3, "parent": "upper", "pivot": [84.6, 258.0]}}, "marks": [[57.0, 288.0], [60.0, 420.0]], "props": {"watch": {"w": 56, "h": 175}, "driver": {"w": 27, "h": 144}}}};
+const EXTRAS={"mother": {"w": 204, "h": 551}, "oldman": {"w": 270, "h": 554}, "pemantik1": {"w": 267, "h": 668}, "pemantik2": {"w": 291, "h": 669}, "baker": {"w": 244, "h": 545}, "youngmother": {"w": 374, "h": 515}, "stout": {"w": 220, "h": 565}, "girl": {"w": 183, "h": 421}};
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const E={
+  io:t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,
+  out:t=>1-Math.pow(1-t,3),
+  in:t=>t*t*t,
+  lin:t=>t
+};
+const tw=(t,t0,t1,a,b,e=E.io)=>t<=t0?a:t>=t1?b:lerp(a,b,e((t-t0)/(t1-t0)));
+/* smooth 1D value noise, -1..1 */
+const hash=n=>{const s=Math.sin(n*127.1+311.7)*43758.5453;return s-Math.floor(s)};
+const noise=x=>{const i=Math.floor(x),f=x-i,u=f*f*(3-2*f);return lerp(hash(i),hash(i+1),u)*2-1};
+const DPR=()=>Math.min(2,devicePixelRatio||1);
+
+/* ---------------- images ---------------- */
+const IMG={};
+function loadImages(){
+  const keys=Object.keys(ASSET).filter(k=>!k.startsWith('s_')&&!k.startsWith('end_loop'));
+  return Promise.all(keys.map(k=>new Promise(res=>{const im=new Image();im.onload=im.onerror=()=>res();im.src=ASSET[k];IMG[k]=im})));
+}
+
+/* ---------------- sound: real recordings only ---------------- */
+const SND={ctx:null,buf:{},on:true,master:null};
+function audioInit(){
+  if(SND.ctx)return;
+  try{SND.ctx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return}
+  SND.master=SND.ctx.createGain();SND.master.gain.value=.9;SND.master.connect(SND.ctx.destination);
+  for(const k of Object.keys(ASSET).filter(k=>k.startsWith('s_'))){
+    const src=ASSET[k];
+    const bytes=src.startsWith('data:')?Promise.resolve((()=>{const bin=atob(src.split(',')[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return arr.buffer})())
+      :fetch(src).then(r=>r.arrayBuffer());
+    bytes.then(buf=>SND.ctx.decodeAudioData(buf)).then(b=>SND.buf[k.slice(2)]=b).catch(()=>{});
+  }
+}
+function play(name,vol=.6,rate=1,delay=0){
+  if(!SND.on||!SND.ctx||!SND.buf[name])return;
+  const s=SND.ctx.createBufferSource();s.buffer=SND.buf[name];s.playbackRate.value=rate;
+  const g=SND.ctx.createGain();g.gain.value=vol;s.connect(g);g.connect(SND.master);
+  s.start(SND.ctx.currentTime+delay);
+}
+/* the music box: its tune loops while the spring is wound; turning the sound off lets it run down */
+const MUS={src:null,gain:null,rate:1,want:false,speed:0};
+function musicTick(){
+  const on=SND.on&&MUS.want&&SND.buf.musicbox;
+  if(on&&!MUS.src&&SND.ctx){const s=SND.ctx.createBufferSource();s.buffer=SND.buf.musicbox;s.loop=true;const g=SND.ctx.createGain();g.gain.value=0;
+    s.connect(g);g.connect(SND.master);s.start();g.gain.linearRampToValueAtTime(.3,SND.ctx.currentTime+2.5);MUS.src=s;MUS.gain=g;MUS.rate=1}
+  if(!on&&MUS.src&&!MUS.stopping){const c=SND.ctx,now=c.currentTime,s=MUS.src,g=MUS.gain;MUS.stopping=1;
+    // switched off: the spring runs down (slower, lower, quieter). Left behind on the desk as we dive away:
+    // it simply grows distant, at the same pitch.
+    const T=MUS.leave?3.4:1.4;
+    g.gain.cancelScheduledValues(now);g.gain.setValueAtTime(g.gain.value,now);g.gain.linearRampToValueAtTime(0,now+T);
+    if(!MUS.leave){s.playbackRate.cancelScheduledValues(now);s.playbackRate.setValueAtTime(1,now);s.playbackRate.linearRampToValueAtTime(.72,now+T)}
+    setTimeout(()=>{try{s.stop()}catch(e){}if(MUS.src===s){MUS.src=null;MUS.stopping=0}},T*1000+100)}
+}
+let lastFlip=-1;
+function flipSound(){let i;do{i=1+Math.floor(Math.random()*10)}while(i===lastFlip);lastFlip=i;play('flip'+i,.55,.94+Math.random()*.12)}
+function wind(dur){
+  if(!SND.on||!SND.ctx)return;
+  const c=SND.ctx,n=Math.floor(c.sampleRate*dur),b=c.createBuffer(1,n,c.sampleRate),d=b.getChannelData(0);let last=0;
+  for(let i=0;i<n;i++){const w=Math.random()*2-1;last=(last+.02*w)/1.02;d[i]=last*3.2}
+  const s=c.createBufferSource();s.buffer=b;const f=c.createBiquadFilter();f.type='lowpass';
+  const g=c.createGain(),t=c.currentTime;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.5,t+dur*.3);g.gain.linearRampToValueAtTime(.3,t+dur*.7);g.gain.linearRampToValueAtTime(0,t+dur);
+  f.frequency.setValueAtTime(380,t);f.frequency.linearRampToValueAtTime(950,t+dur*.45);f.frequency.linearRampToValueAtTime(300,t+dur);
+  s.connect(f);f.connect(g);g.connect(SND.master);s.start();
+}
+
+/* =====================================================================
+   THE OIL LAMP: one light source for the whole room.
+   A wick flame under a glass chimney is fairly steady: slow wander of a few
+   percent, a faster shimmer, and now and then a draught that pulls it down
+   and lets it spring back. Light falls off with distance (inverse square),
+   and every polished surface throws a highlight on the side facing the flame.
+   ===================================================================== */
+const LAMP={x:150,y:162};               // flame, in desk-image pixels
+const DIW=1672,DIH=941;
+const lamp={F:1,sx:0,sy:0,gust:0,gv:0,mood:1,moodT:1};
+function lampStep(t,dt){
+  if(!reduce&&Math.random()<dt*.05){lamp.gv-=1.6+Math.random()*1.4}         // a draught
+  lamp.gv+=(-lamp.gust*38-lamp.gv*7.5)*dt;lamp.gust+=lamp.gv*dt;             // damped spring back
+  const k=reduce?.25:1;
+  lamp.F=1+k*(.05*noise(t*1.1)+.03*noise(t*3.7+9)+.012*noise(t*11+4))+lamp.gust*.08;
+  lamp.sx=k*(2.4*noise(t*.8+3)-lamp.gust*6);lamp.sy=k*(1.6*noise(t*1.9+7));
+  lamp.mood+=(lamp.moodT-lamp.mood)*Math.min(1,dt*.8);
+}
+/* polished things on the desk: [x, y, radius, kind] in desk-image pixels */
+const SHINE=[
+  [778,95,72,'lens'],[1148,57,44,'lens'],[1298,112,50,'lens'],
+  [212,752,84,'glass'],[1385,716,88,'glass'],[1545,802,88,'glass'],[1556,336,54,'glass'],
+  [433,195,42,'bottle'],
+  [165,300,128,'brass'],[60,700,58,'brass'],[1475,214,62,'brass'],[1612,88,16,'brass'],
+  [70,490,40,'brass'],[152,512,38,'brass'],[118,570,34,'brass'],[250,516,14,'brass'],[222,592,14,'brass'],
+  [1018,148,16,'brass'],[890,118,14,'brass']
+];
+const dk=$('#deskcv'),dctx=dk.getContext('2d');
+let deskGeo={dw:0,dh:0};
+let watchA=0,watchV=0,lastSec=-1;
+function camMatrix(){const t=getComputedStyle(world).transform;return t&&t!=='none'?new DOMMatrix(t):new DOMMatrix()}
+function drawRoom(t,dt){
+  const W=innerWidth,H=innerHeight,dpr=DPR();
+  if(dk.width!==Math.round(W*dpr)||dk.height!==Math.round(H*dpr)){dk.width=Math.round(W*dpr);dk.height=Math.round(H*dpr)}
+  const m=camMatrix(),s=m.a,cx=W/2+m.e,cy=H/2+m.f;
+  const k=s*deskGeo.dw/DIW, ox=cx-deskGeo.dw*s/2, oy=cy-deskGeo.dh*s/2;
+  const F=lamp.F*lamp.mood, Lx=LAMP.x+lamp.sx, Ly=LAMP.y+lamp.sy;
+  const g=dctx;
+  g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='source-over';g.globalAlpha=1;g.fillStyle='#0d0907';g.fillRect(0,0,dk.width,dk.height);
+  g.setTransform(dpr*k,0,0,dpr*k,dpr*ox,dpr*oy);
+  if(IMG.desk)g.drawImage(IMG.desk,0,0,DIW,DIH);
+  // the music box: its pinned cylinder turns toward the comb while the tune plays; the winding key turns with it
+  {const playing=!!(MUS.src&&!MUS.stopping);MUS.speed+=((playing?1:0)-MUS.speed)*Math.min(1,dt*(playing?1.6:.9));
+   MUS.ang=(MUS.ang||0)+MUS.speed*.32*dt;MUS.key=(MUS.key||0)+MUS.speed*.55*dt;
+   // It stands just right of the book, lid open toward the outside, turned a little off square like a thing
+   // put down by hand; the outer half runs past the edge of the view. Drawn on its own small canvas first, so
+   // the lamp's light can be laid over it: the painting's own light came from above, the flame is to the left.
+   const BX=1308,BY=402,TH=Math.PI/2-.24,k=165/1113,FW=1413,FH=1113,Q=.7;
+   if(!MUS.cv){MUS.cv=document.createElement('canvas');MUS.cv.width=Math.round(FW*Q);MUS.cv.height=Math.round(FH*Q);MUS.cx=MUS.cv.getContext('2d')}
+   const m=MUS.cx;m.setTransform(1,0,0,1,0,0);m.globalCompositeOperation='source-over';m.globalAlpha=1;m.clearRect(0,0,MUS.cv.width,MUS.cv.height);m.setTransform(Q,0,0,Q,0,0);
+   if(IMG.mb_box)m.drawImage(IMG.mb_box,0,0,FW,FH);
+   // the flame's direction in the box's own frame
+   const ldx=LAMP.x-BX,ldy=LAMP.y-BY,ll=Math.hypot(ldx,ldy),lx=(ldx*Math.cos(TH)+ldy*Math.sin(TH))/ll,ly=(-ldx*Math.sin(TH)+ldy*Math.cos(TH))/ll;
+   // pins: each sits on a track that meets one tooth of the comb; seen from above, a pin's height on the
+   // cylinder is R*sin(angle); it foreshortens toward the edges and is brightest where the drum faces the flame
+   if(!MUS.pins){MUS.pins=[];let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647;
+     for(let x=474;x<982;x+=11.6)for(let j=0;j<5;j++)MUS.pins.push([x+(r()-.5)*2,r()*Math.PI*2])}
+   const CY=637,R=81,pin=IMG.mb_pin,th0=Math.asin(clamp(ly,-1,1))*.8;
+   if(pin)for(const [px,a0] of MUS.pins){const th=((a0+MUS.ang)%(Math.PI*2))-Math.PI;const c=Math.cos(th);if(c<.12)continue;
+     const yy=CY+R*Math.sin(th),sz=13*(.55+.45*c),lit=c*(.55+.45*Math.max(0,1-Math.abs(th-th0)*1.4));
+     m.globalAlpha=Math.min(1,lit*1.25);m.drawImage(pin,px-sz/2,yy-sz*.5*(.6+.4*c),sz,sz*(.6+.4*c))}
+   m.globalAlpha=1;
+   // the key turns about its shaft: from above we see its bow flatten and widen
+   if(IMG.mb_key){const sy=Math.cos(MUS.key);m.save();m.translate(1188,681);m.scale(1,Math.abs(sy)<.08?.08*Math.sign(sy||1):sy);m.drawImage(IMG.mb_key,0,589-681,184,193);m.restore()}
+   // lamplight over the whole box: the side facing the flame keeps its light, the far side falls into shade
+   m.globalCompositeOperation='source-atop';
+   const gr0=m.createLinearGradient(FW/2+lx*FW*.5,FH/2+ly*FH*.5,FW/2-lx*FW*.5,FH/2-ly*FH*.5);
+   gr0.addColorStop(0,'rgba(255,170,90,.10)');gr0.addColorStop(.45,'rgba(10,6,4,0)');gr0.addColorStop(1,'rgba(10,6,4,.42)');
+   m.fillStyle=gr0;m.fillRect(0,0,FW,FH);m.globalCompositeOperation='source-over';
+   // onto the desk, with a soft shadow cast away from the flame (shadow offsets are in screen space)
+   g.save();g.translate(BX,BY);g.rotate(TH);
+   const scr=Math.hypot(g.getTransform().a,g.getTransform().b);
+   g.shadowColor='rgba(8,4,2,.62)';g.shadowBlur=11*scr;g.shadowOffsetX=-ldx/ll*9*scr;g.shadowOffsetY=-ldy/ll*9*scr+2*scr;
+   g.drawImage(MUS.cv,-FW*k/2,-FH*k/2,FW*k,FH*k);
+   g.restore()}
+  // the pocket watch tells the reader's own time; the seconds hand ticks and settles like a hairspring.
+  // Hands are drawn under the lamplight and the glass glint, so they are lit like the dial they sit on.
+  {const now=new Date(),sec=now.getSeconds(),min=now.getMinutes()+sec/60,hr=(now.getHours()%12)+min/60;
+   const target=sec*Math.PI/30;let diff=((target-watchA+Math.PI*3)%(Math.PI*2))-Math.PI;
+   if(Math.abs(diff)>1){watchA=target;watchV=0;diff=0}
+   watchV+=(diff*900-watchV*34)*dt;watchA+=watchV*dt;
+   const WX=205,WY=750,OFF=.227;          // dial centre and the dial's own tilt (12 o'clock sits 13° clockwise)
+   const hand=(ang,len,w,tail,col)=>{g.save();g.rotate(ang);g.fillStyle=col;g.beginPath();
+     g.moveTo(0,tail);g.quadraticCurveTo(w,tail*.3,w*.9,-len*.35);g.quadraticCurveTo(w*1.6,-len*.62,0,-len);g.quadraticCurveTo(-w*1.6,-len*.62,-w*.9,-len*.35);g.quadraticCurveTo(-w,tail*.3,0,tail);g.fill();g.restore()};
+   for(const pass of [0,1]){g.save();g.translate(WX+(pass?0:1.6),WY+(pass?0:2.2));g.rotate(OFF);
+     const c=pass?'#1e2a42':'rgba(40,26,14,.28)';
+     hand(hr*Math.PI/6,27,2.6,6,c);hand(min*Math.PI/30,42,2,7,c);
+     g.save();g.rotate(watchA);g.strokeStyle=pass?'#2a2018':c;g.lineWidth=1.1;g.lineCap='round';g.beginPath();g.moveTo(0,11);g.lineTo(0,-47);g.stroke();
+     g.fillStyle=g.strokeStyle;g.beginPath();g.arc(0,8,2.2,0,7);g.fill();g.restore();
+     if(pass){g.fillStyle='#b08a48';g.beginPath();g.arc(0,0,3.6,0,7);g.fill();g.fillStyle='#1e2a42';g.beginPath();g.arc(0,0,1.6,0,7);g.fill()}
+     g.restore()}}
+  // 1. falloff: the painting already holds the lamp's light; we let it breathe with the flame
+  const d0=430*Math.sqrt(F);
+  let gr=g.createRadialGradient(Lx,Ly,0,Lx,Ly,1900);
+  for(let i=0;i<=10;i++){const d=i/10*1900,I=1/(1+(d/d0)**2),v=Math.round(255*(.62+.38*I));gr.addColorStop(i/10,`rgb(${v},${Math.round(v*.97)},${Math.round(v*.95)})`)}
+  g.globalCompositeOperation='multiply';g.fillStyle=gr;g.fillRect(0,0,DIW,DIH);
+  // 2. warm bloom near the flame (adds light, never removes)
+  g.globalCompositeOperation='lighter';
+  gr=g.createRadialGradient(Lx,Ly,0,Lx,Ly,980*F);
+  gr.addColorStop(0,`rgba(255,172,92,${.34*F*F})`);gr.addColorStop(.18,`rgba(255,156,76,${.16*F*F})`);gr.addColorStop(.5,`rgba(255,140,60,${.06*F*F})`);gr.addColorStop(1,'rgba(255,140,60,0)');
+  g.fillStyle=gr;g.fillRect(0,0,DIW,DIH);
+  // ring of light thrown by the glass chimney onto the wood
+  gr=g.createRadialGradient(Lx+6,Ly+130,180,Lx+6,Ly+130,250);gr.addColorStop(0,'rgba(255,190,110,0)');gr.addColorStop(.5,`rgba(255,190,110,${.05*F})`);gr.addColorStop(1,'rgba(255,190,110,0)');
+  g.fillStyle=gr;g.fillRect(0,0,DIW,DIH);
+  // 3. the flame itself: hot core, soft halo, leaning with the air
+  gr=g.createRadialGradient(Lx,Ly,0,Lx,Ly,120);gr.addColorStop(0,`rgba(255,236,190,${.55*F})`);gr.addColorStop(.25,`rgba(255,190,110,${.22*F})`);gr.addColorStop(1,'rgba(255,170,90,0)');
+  g.fillStyle=gr;g.fillRect(Lx-130,Ly-130,260,260);
+  g.save();g.translate(LAMP.x,LAMP.y+18);g.rotate(lamp.sx*.03);g.scale(1,1+.08*(lamp.F-1)*6);
+  gr=g.createRadialGradient(0,-16,1,0,-10,26);gr.addColorStop(0,`rgba(255,250,232,${.9*F})`);gr.addColorStop(.5,`rgba(255,214,140,${.45*F})`);gr.addColorStop(1,'rgba(255,190,110,0)');
+  g.fillStyle=gr;g.beginPath();g.moveTo(0,-44);g.bezierCurveTo(14,-24,16,-4,0,6);g.bezierCurveTo(-16,-4,-14,-24,0,-44);g.fill();g.restore();
+  // glints on the chimney glass, left and right walls, soft at both ends
+  for(const [x0,y0] of [[62,120],[226,120]]){g.save();g.translate(x0,y0);g.scale(.16,1);
+    gr=g.createRadialGradient(0,0,0,0,0,110);gr.addColorStop(0,`rgba(255,232,196,${.22*F})`);gr.addColorStop(1,'rgba(255,232,196,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(0,0,110,0,7);g.fill();g.restore()}
+  // 4. highlights: on a curved surface seen from above the highlight sits on the side facing the light
+  for(const [x,y,r,kind] of SHINE){
+    const dx=x-Lx,dy=y-Ly,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d;
+    const I=Math.min(1.25,1/(1+(d/700)**2)*1.6)*F*F;
+    const hx=x-ux*r*.52, hy=y-uy*r*.52;
+    const glass=kind!=='brass';
+    const a=(glass?.55:.42)*I;
+    gr=g.createRadialGradient(hx,hy,0,hx,hy,r*(glass?.22:.3));
+    gr.addColorStop(0,`rgba(255,246,226,${a})`);gr.addColorStop(.4,`rgba(255,214,150,${a*.35})`);gr.addColorStop(1,'rgba(255,200,130,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(hx,hy,r*(glass?.22:.3),0,7);g.fill();
+    if(kind==='lens'||kind==='glass'){
+      // rim catching the light: an arc on the lamp-facing edge
+      const ang=Math.atan2(-uy,-ux);g.lineCap='round';
+      g.strokeStyle=`rgba(255,222,170,${.32*I})`;g.lineWidth=Math.max(1.5,r*.06);
+      g.beginPath();g.arc(x,y,r*.93,ang-.55,ang+.55);g.stroke();
+      // a faint second reflection, opposite side, inside the glass
+      g.strokeStyle=`rgba(255,236,200,${.12*I})`;g.lineWidth=Math.max(1,r*.04);
+      g.beginPath();g.arc(x,y,r*.62,ang+Math.PI-.4,ang+Math.PI+.4);g.stroke();
+    }
+    if(kind==='bottle'){g.fillStyle=`rgba(255,236,200,${.18*I})`;g.fillRect(hx-3,hy-r*.5,6,r*.9)}
+  }
+  g.globalCompositeOperation='source-over';g.globalAlpha=1;
+  // 6. shadow and night beyond the lamp's reach
+  gr=g.createRadialGradient(Lx,Ly,DIW*.25,Lx,Ly,DIW*1.15);gr.addColorStop(0,'rgba(6,4,8,0)');gr.addColorStop(1,`rgba(6,4,8,${.25+.25*(1-lamp.mood)})`);
+  g.fillStyle=gr;g.fillRect(-200,-200,DIW+400,DIH+400);
+
+  // ---- the flame's flicker, felt on the pages (each page carries its own light, see .page::before/::after) ----
+  const root=document.documentElement.style;
+  root.setProperty('--warm',clamp(F*F,0,1.5).toFixed(3));root.setProperty('--dark',(clamp(2-F,.55,1.45)*(1.3-.3*lamp.mood)).toFixed(3));
+  // the book's shadow falls away from the flame and trembles with it (world units)
+  const Lw=lampWorld(),bc=bookCenterWorld(),vx=bc[0]-Lw[0],vy=bc[1]-Lw[1],vl=Math.hypot(vx,vy)||1,len=22+70*(F-1);
+  bookshadow.style.transform=`translate(${vx/vl*len}px,${vy/vl*len}px)`;
+}
+/* where the flame sits, in the world's own pixels, relative to the world's centre */
+function lampWorld(){return [((LAMP.x/DIW)-.5)*deskGeo.dw,((LAMP.y/DIH)-.5)*deskGeo.dh]}
+function bookCenterWorld(){const m=new DOMMatrix(getComputedStyle(wrap).transform),bw=portrait?pageW:pageW*2;return [m.e+bw/2,0]}
+/* give every page the lamp's position in its own coordinates, and the distances where light fades */
+/* X0: where the book's left edge is right now (world px). While the book slides to or from the middle the
+   light must travel with it frame by frame; jumping to the destination made the pages blink. */
+let litX=null;
+function lightVars(X0in){
+  if(!pageW)return;
+  const Lw=lampWorld(),i=curIndex(),bw=portrait?pageW:pageW*2,X0=X0in??(-bw/2+shiftFor(i)),Y0=-pageH/2;litX=X0;
+  // page-flip rewrites each page's inline style, so the light lives in a stylesheet keyed by page number
+  let css='';
+  allPages.forEach((p,k)=>{
+    p.dataset.i=k;
+    const right=!portrait&&(k===0||(k%2===0&&k<N-1));
+    const ox=X0+(right?pageW:0),lx=Lw[0]-ox,ly=Lw[1]-Y0;
+    const ds=[[0,0],[pageW,0],[0,pageH],[pageW,pageH]].map(([x,y])=>Math.hypot(x-lx,y-ly));
+    const dN=Math.min(...ds),dF=Math.max(...ds);
+    const ux=lx-pageW/2,uy=ly-pageH/2,ul=Math.hypot(ux,uy)||1;
+    css+=`.page[data-i="${k}"]{--lx:${lx.toFixed(0)}px;--ly:${ly.toFixed(0)}px;--r1:${(dN*.98).toFixed(0)}px;--r2:${((dN+dF)/2).toFixed(0)}px;--r3:${dF.toFixed(0)}px;--sx:${(50+ux/ul*30).toFixed(1)}%;--sy:${(50+uy/ul*30).toFixed(1)}%}\n`;
+  });
+  let tag=document.getElementById('litvars');if(!tag){tag=document.createElement('style');tag.id='litvars';document.head.appendChild(tag)}
+  tag.textContent=css;
+}
+
+/* =====================================================================
+   PUPPETS: jointed paper figures cut from printed sheets.
+   ===================================================================== */
+const PEWTER=(ctx,x,y,r)=>{
+  const g=ctx.createRadialGradient(x-r*.35,y-r*.4,r*.1,x,y,r);
+  g.addColorStop(0,'#d9d4c8');g.addColorStop(.45,'#8d877c');g.addColorStop(1,'#3a352f');
+  ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fillStyle=g;ctx.fill();
+  ctx.lineWidth=r*.18;ctx.strokeStyle='rgba(30,22,16,.75)';ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x-r*.45,y);ctx.lineTo(x+r*.45,y);ctx.strokeStyle='rgba(30,22,16,.55)';ctx.lineWidth=r*.16;ctx.stroke();
+};
+function rotAbout(ctx,p,deg){if(!deg)return;ctx.translate(p[0],p[1]);ctx.rotate(deg*Math.PI/180);ctx.translate(-p[0],-p[1])}
+function puppet(ctx,name,o){
+  const m=CHARS[name],P=m.parts,out={};
+  const h=(o.h||300)*m.h, s=h/m.H, face=o.face||1;
+  ctx.save();
+  ctx.translate(o.x,o.y+(o.bob||0));
+  ctx.rotate((o.rock||0)*Math.PI/180);
+  ctx.scale(s*face,s);
+  ctx.translate(-m.W/2,-m.H);
+  if(o.alpha!=null)ctx.globalAlpha=o.alpha;
+  const order=Object.keys(P).sort((a,b)=>P[a].z-P[b].z);
+  for(const k of order){
+    const p=P[k],im=IMG[name+'_'+k];if(!im)continue;
+    ctx.save();
+    if(p.parent==='upper')rotAbout(ctx,P.upper.pivot,o.upper||0);
+    if(p.pivot)rotAbout(ctx,p.pivot,k==='head'?clamp(o[k]||0,-13,13):(o[k]||0));
+    ctx.shadowColor='rgba(25,14,8,.34)';ctx.shadowBlur=9;ctx.shadowOffsetX=3*face;ctx.shadowOffsetY=5;
+    ctx.drawImage(im,p.x,p.y);
+    ctx.shadowColor='transparent';
+    if(k==='lower'&&o.track){for(const [key,fx,fy] of o.track){out[key]=new DOMPoint(p.x+p.w*fx,p.y+p.h*fy).matrixTransform(ctx.getTransform())}}
+    ctx.restore();
+  }
+  const r=7;
+  ctx.save();PEWTER(ctx,P.upper.pivot[0],P.upper.pivot[1],r);ctx.restore();
+  ctx.save();rotAbout(ctx,P.upper.pivot,o.upper||0);PEWTER(ctx,P.lower.pivot[0],P.lower.pivot[1],r);ctx.restore();
+  for(const mk of m.marks)PEWTER(ctx,mk[0],mk[1],r*.9);
+  ctx.restore();
+  out.s=s;
+  return out;
+}
+
+/* =====================================================================
+   STAGE: one canvas per theater page. Logical size 900 x 1200,
+   matching the printed proscenium (1086 x 1448).
+   ===================================================================== */
+const SW=900,SH=1200,FK=SW/1086;
+const OP={x:111,y:222,w:677,h:858};          // the opening in the proscenium
+const FLOOR=1082,BASE=1022;
+const RIDGE={roofL:.24,roofS:.27};
+function ridgeY(key,w){const im=IMG['sc_'+key];const h=w*im.height/im.width;return BASE-h+h*RIDGE[key]}
+const FOOT=[186,293,398,505,613,718];         // footlight domes, x
+const SIDE=[[50,497],[848,497]];              // lanterns on the pillars
+let grain=null;
+function makeGrain(){
+  const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');const d=g.createImageData(256,256);
+  for(let i=0;i<d.data.length;i+=4){const v=205+Math.random()*50;d.data[i]=v;d.data[i+1]=v*.96;d.data[i+2]=v*.88;d.data[i+3]=255}
+  g.putImageData(d,0,0);grain=c;
+}
+/* draw a cut-out piece scaled to width w, anchored at (ax,ay) of itself */
+function piece(ctx,key,x,y,w,o={}){
+  const im=IMG['sc_'+key];if(!im||!im.width)return {h:0};
+  const h=w*im.height/im.width,ax=o.ax??.5,ay=o.ay??1;
+  ctx.save();ctx.translate(x,y);if(o.rot)ctx.rotate(o.rot);if(o.flip)ctx.scale(-1,1);if(o.alpha!=null)ctx.globalAlpha=o.alpha;
+  if(o.shadow!==false){ctx.shadowColor='rgba(25,14,8,.32)';ctx.shadowBlur=8;ctx.shadowOffsetX=3;ctx.shadowOffsetY=4}
+  ctx.drawImage(im,-w*ax,-h*ay,w,h);ctx.restore();return {h};
+}
+function backdrop(ctx,t){
+  const im=IMG.sc_sky;if(!im)return;const w=OP.w+60,h=w*im.height/im.width;
+  ctx.drawImage(im,OP.x-30+Math.sin(t*.05)*6,700-.58*h,w,h);
+}
+function cloudBand(ctx,key,y,w,speed,t,alpha=1){
+  const im=IMG['sc_'+key];if(!im)return;const h=w*im.height/im.width;let x=OP.x-((t*speed)%w);
+  ctx.save();ctx.globalAlpha=alpha;for(;x<OP.x+OP.w;x+=w-2)ctx.drawImage(im,x,y-h,w,h);ctx.restore();
+}
+function smoke(ctx,x,y,t,seed,scale=1){
+  // two engraved plumes, each rising, widening and thinning out, one after the other
+  const im=IMG.sc_smoke;if(!im)return;
+  for(let i=0;i<2;i++){const k=((t*.09+i*.5+seed)%1),w=(42+k*40)*scale,h=w*im.height/im.width;
+    ctx.save();ctx.globalAlpha=Math.sin(k*Math.PI)*.8;ctx.translate(x+k*18*scale+Math.sin(t*.7+seed*9)*4,y-k*60*scale);ctx.rotate(.08+k*.12);
+    ctx.drawImage(im,-w*.32,-h,w,h);ctx.restore()}
+}
+function starOnString(ctx,x,y,sway,bright){
+  ctx.save();ctx.strokeStyle='rgba(43,29,20,.7)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x-sway*.2,OP.y);ctx.lineTo(x+sway,y-18);ctx.stroke();
+  ctx.translate(x+sway,y);ctx.rotate(sway*.01);
+  if(bright>0){const g=ctx.createRadialGradient(0,0,2,0,0,80);g.addColorStop(0,`rgba(255,252,242,${.8*bright})`);g.addColorStop(1,'rgba(255,252,242,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,80,0,7);ctx.fill()}
+  ctx.beginPath();for(let i=0;i<16;i++){const r=i%2?7:(i%4?15:26);const a=i/16*Math.PI*2-Math.PI/2;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r)}ctx.closePath();
+  ctx.fillStyle='#f6efdf';ctx.fill();ctx.lineWidth=1.6;ctx.strokeStyle='#2b1d14';ctx.stroke();
+  ctx.restore();
+}
+function nightWash(ctx,night){
+  ctx.save();ctx.globalCompositeOperation='multiply';
+  ctx.fillStyle=`rgb(${Math.round(lerp(255,98,night))},${Math.round(lerp(246,104,night))},${Math.round(lerp(232,138,night))})`;ctx.fillRect(OP.x,OP.y,OP.w,OP.h);
+  ctx.globalCompositeOperation='source-over';
+  const v=ctx.createRadialGradient(SW/2,OP.y+OP.h*.6,OP.h*.25,SW/2,OP.y+OP.h*.6,OP.h*.85);
+  v.addColorStop(0,'rgba(20,12,8,0)');v.addColorStop(1,`rgba(20,12,8,${.22+.25*night})`);ctx.fillStyle=v;ctx.fillRect(OP.x,OP.y,OP.w,OP.h);
+  ctx.restore();
+}
+function glow(ctx,x,y,r,a,warm){if(a<=0)return;ctx.save();ctx.globalCompositeOperation='lighter';const g=ctx.createRadialGradient(x,y,1,x,y,r);
+  const c=warm?'255,236,200':'255,246,226';g.addColorStop(0,`rgba(${c},${a})`);g.addColorStop(.35,`rgba(${c},${a*.33})`);g.addColorStop(1,`rgba(${c},0)`);ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.restore()}
+/* a compass needle is a little pendulum on a pivot: it overshoots and settles */
+function needleStep(st,target,dt){
+  if(st.na==null){st.na=target;st.nv=0}
+  const diff=((target-st.na+Math.PI*3)%(Math.PI*2))-Math.PI;
+  st.nv+=(diff*26-st.nv*3.2)*dt;st.na+=st.nv*dt;return st.na;
+}
+
+/* a lantern hangs from a hook: it always hangs down, and swings when the hand that holds it moves.
+   theta'' = -(g/L) sin(theta) - c theta' - (a_x/L) cos(theta) */
+const G_STAGE=2178;   // 9.8 m/s^2 in stage units (a 330-unit puppet stands about 1.5 m)
+function hangLantern(ctx,st,key,pt,scale,dt,alpha=1){
+  const im=IMG.suluh_prop_lantern;if(!im||!pt)return null;
+  const S=st[key]||(st[key]={a:0,v:0,px:pt.x,vx:0,init:0});
+  const h=im.height*scale,w=im.width*scale,L=h*.62;
+  if(S.init>1&&dt>0){const vx=(pt.x-S.px)/dt,ax=clamp((vx-S.vx)/dt,-6000,6000);S.vx=vx;
+    S.v+=(-(G_STAGE/L)*Math.sin(S.a)-1.5*S.v-(ax/L)*Math.cos(S.a))*dt;S.a+=S.v*dt}
+  S.px=pt.x;S.init++;
+  ctx.save();ctx.translate(pt.x,pt.y);ctx.rotate(S.a);ctx.globalAlpha=alpha;
+  ctx.shadowColor='rgba(25,14,8,.34)';ctx.shadowBlur=7;ctx.shadowOffsetX=3;ctx.shadowOffsetY=4;
+  ctx.drawImage(im,-w*.46,-h*.02,w,h);ctx.restore();
+  return {x:pt.x-Math.sin(S.a)*h*.66,y:pt.y+Math.cos(S.a)*h*.66};
+}
+const H0=330;
+const SCENES={
+1:{draw(ctx,t,st,dt){
+  const dusk=tw(t,0,14,.05,.38,E.lin);
+  backdrop(ctx,t);
+  // the evening star comes down on its thread and swings to rest
+  const sy=tw(t,6.2,9.4,OP.y-60,OP.y+260,E.out), sway=Math.sin(t*1.25)*10*Math.exp(-Math.max(0,t-8)*.25);
+  starOnString(ctx,500,sy,sway,tw(t,8.6,10,0,1));
+  cloudBand(ctx,'cloudB',935,700,7,t);
+  cloudBand(ctx,'cloudA',975,760,12,t+40);
+  // street lamps standing in the streets between the roofs
+  const lit=i=>tw(t,4.2+i*.7,4.8+i*.7,0,1);
+  const lamps=[[178,0],[598,1],[760,2]];
+  for(const [x,i] of lamps)piece(ctx,i%2?'lamp2':'lamp1',x,BASE-20,52);
+  // right roof slides in from the wing, then the left
+  const rx=tw(t,.8,2.7,420,0,E.out);
+  const lx=tw(t,.6,2.4,-560,0,E.out);
+  piece(ctx,'chim1',160+lx,BASE-30,62);smoke(ctx,160+lx,BASE-186,t,.1);
+  piece(ctx,'roofS',700+rx,BASE,320);smoke(ctx,830+rx,BASE-120,t,.55,.8);
+  // Gaharu walks in on his slide and points at the star
+  const gx=tw(t,5,8,OP.x+OP.w+150,700,E.io),walking=t>5&&t<8;
+  puppet(ctx,'gaharu',{x:gx+rx,y:ridgeY('roofS',320),h:H0,face:-1,bob:walking?-Math.abs(Math.sin(t*7))*6:0,rock:walking?Math.sin(t*7)*1.5:0,
+    head:tw(t,8.4,9.4,0,-9),upper:tw(t,8.2,9.6,0,-118),lower:tw(t,8.2,9.6,0,-18)});
+  piece(ctx,'roofL',340+lx,BASE,540);smoke(ctx,572+lx,BASE-112,t,.3,.8);
+  // Kejora watches the sky, Suluh counts the unlit lamps
+  const laugh=t>10.2&&t<11.6?Math.sin((t-10.2)*24)*2.2:0;
+  puppet(ctx,'kejora',{x:440+lx,y:ridgeY('roofL',540),h:H0,head:-18+laugh,upper:tw(t,10.2,10.6,0,-30)+laugh*2,bob:laugh,rock:laugh*.5});
+  const s1=puppet(ctx,'suluh',{x:290+lx,y:ridgeY('roofL',540),h:H0,head:t<11.4?12+Math.sin(t*1.7)*2:tw(t,11.4,12.6,12,-16),upper:tw(t,2.6,3.4,0,-12),track:[['grip',.68,.42]]});
+  if(s1.grip)hangLantern(ctx,st,'sl',toStage(ctx,s1.grip),s1.s,dt);
+  nightWash(ctx,dusk);
+  for(const [x,i] of lamps)glow(ctx,x,BASE-20-52*313/67+24,90,.8*lit(i));
+}},
+2:{draw(ctx,t,st,dt){
+  const night=tw(t,9,12,.35,.82);
+  backdrop(ctx,t);
+  cloudBand(ctx,'cloudB',940,700,7,t);
+  cloudBand(ctx,'cloudA',985,760,11,t+40);
+  // two rooftops with a gap between them
+  piece(ctx,'roofS',705,BASE,300);smoke(ctx,827,BASE-112,t,.55,.8);
+  piece(ctx,'roofL',250,BASE,440);
+  const yL=ridgeY('roofL',440),yR=ridgeY('roofS',300);
+  // the chest on the left roof; its drawer slides open and shut
+  piece(ctx,'chest',175,yL,92);
+  // Kejora's run: chest -> across -> jump -> right roof -> back
+  let kx,kface=1;const T=t;
+  if(T<3.2)kx=235;
+  else if(T<5.2)kx=tw(T,3.2,5.2,235,440,E.in);
+  else if(T<5.8)kx=lerp(440,655,(T-5.2)/.6);
+  else if(T<7.6)kx=tw(T,5.8,7.6,655,755,E.out);
+  else if(T<8.2){kx=755;kface=-1}
+  else if(T<10){kx=tw(T,8.2,10,755,690);kface=-1}
+  else{kx=690;kface=-1}
+  const run=(T>3.2&&T<7.6)||(T>8.2&&T<10);
+  const jumpY=T>5.2&&T<5.8?-Math.sin((T-5.2)/.6*Math.PI)*80:0;
+  const ky=kx<548?yL:yR;
+  const sBlink=blinkAt(t-12.5,0),kBlink=blinkAt(t-12.5,1);
+  const sp=puppet(ctx,'suluh',{x:345,y:yL,h:H0,head:tw(t,3,4,0,6),upper:tw(t,11.5,12.4,0,-55),lower:tw(t,11.5,12.4,0,-20),track:[['grip',.68,.42]]});
+  const kp=puppet(ctx,'kejora',{x:kx,y:ky+jumpY,h:H0,face:kface,bob:run?-Math.abs(Math.sin(T*9))*8:0,rock:run?Math.sin(T*9)*3:0,
+    upper:T<3?tw(T,1.4,1.9,0,40)-tw(T,2.5,3,0,40):tw(t,11.6,12.4,0,-60),lower:T<3?tw(T,1.4,1.9,0,30)-tw(T,2.5,3,0,30):0,scarf:Math.sin(t*6)*(run?10:4),
+    track:[['hand',.92,.4]]});
+  const sL=sp.grip?hangLantern(ctx,st,'sl',toStage(ctx,sp.grip),sp.s,dt):null;
+  // Kejora takes up his own lantern when night falls
+  const kL=(t>11.8&&kp.hand)?hangLantern(ctx,st,'kl',toStage(ctx,kp.hand),kp.s,dt,tw(t,11.8,12.3,0,1)):null;
+  nightWash(ctx,night);
+  if(sL)glow(ctx,sL.x,sL.y,120,sBlink);
+  if(kL)glow(ctx,kL.x,kL.y,120,kBlink);
+  // the giant compass at the foot of the stage; its needle follows Kejora's breath, not the drawer
+  const cx=SW/2,cy=1040,cw=230;
+  piece(ctx,'compass',cx,cy,cw,{ax:.5,ay:.5});
+  const target=Math.atan2((ky-160)-cy,kx-cx)+Math.PI/2;
+  const a=needleStep(st,target,dt);
+  piece(ctx,'needle',cx,cy,cw*.135,{ax:.5,ay:.5,rot:a,shadow:true});
+}}
+};
+/* =====================================================================
+   ENGRAVING KIT: everything drawn in code follows the printed sheets —
+   ink lines on paper tone, shading by parallel hatching, light from the upper left.
+   ===================================================================== */
+const PAPER='#e9ddc0',PAPER_D='#d9c8a3',INKC='rgba(43,29,20,.92)';
+const HPC={};
+function hatch(ctx,ang,gap,a,lw=1){
+  const key=gap+'|'+a+'|'+lw;let c=HPC[key];
+  if(!c){c=document.createElement('canvas');c.width=8;c.height=Math.max(2,Math.round(gap));const g=c.getContext('2d');
+    g.fillStyle=`rgba(43,29,20,${a})`;g.fillRect(0,c.height-lw,8,lw);HPC[key]=c}
+  const p=ctx.createPattern(c,'repeat');p.setTransform(new DOMMatrix().rotateSelf(ang));return p;
+}
+/* fill a path with paper, shade it with hatching, then ink the outline */
+function ink(ctx,build,o={}){
+  ctx.save();ctx.beginPath();build(ctx);
+  ctx.fillStyle=o.fill||PAPER;ctx.fill(o.evenodd?'evenodd':'nonzero');
+  if(o.h||o.h2||o.shade){ctx.save();ctx.clip(o.evenodd?'evenodd':'nonzero');
+    const fr=o.evenodd?'evenodd':'nonzero';
+    if(o.h){ctx.fillStyle=hatch(ctx,...o.h);ctx.fill(fr)}
+    if(o.h2){ctx.fillStyle=hatch(ctx,...o.h2);ctx.fill(fr)}
+    if(o.shade){const [x0,x1,a]=o.shade;const g=ctx.createLinearGradient(x0,0,x1,0);g.addColorStop(0,'rgba(43,29,20,0)');g.addColorStop(1,`rgba(43,29,20,${a})`);ctx.fillStyle=g;ctx.fill()}
+    ctx.restore()}
+  if(o.lw!==0){ctx.lineWidth=o.lw||1.6;ctx.strokeStyle=o.stroke||INKC;ctx.lineJoin='round';ctx.stroke()}
+  ctx.restore();
+}
+function line(ctx,pts,lw=1.4,a=.9){ctx.save();ctx.strokeStyle=`rgba(43,29,20,${a})`;ctx.lineWidth=lw;ctx.lineCap='round';ctx.beginPath();pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();ctx.restore()}
+/* where a point of a puppet's own drawing lands on the stage (follows the same transform as puppet()) */
+function charPt(name,o,cx,cy){
+  const m=CHARS[name],h=(o.h||300)*m.h,s=h/m.H,f=o.face||1,r=(o.rock||0)*Math.PI/180;
+  const lx=(cx-m.W/2)*s*f,ly=(cy-m.H)*s;
+  return {x:o.x+lx*Math.cos(r)-ly*Math.sin(r),y:o.y+(o.bob||0)+lx*Math.sin(r)+ly*Math.cos(r)};
+}
+const GAHARU_LAMP=[235,52];            // the silver lantern on Gaharu's staff, in his drawing
+function extra(ctx,name,o){
+  const im=IMG['x_'+name];if(!im||!im.width)return null;const m=EXTRAS[name];
+  const h=o.h||300,s=h/m.h,f=o.face||1;
+  ctx.save();ctx.translate(o.x,o.y+(o.bob||0));ctx.rotate((o.rock||0)*Math.PI/180);ctx.scale(s*f,s);
+  if(o.alpha!=null)ctx.globalAlpha=o.alpha;
+  ctx.shadowColor='rgba(25,14,8,.34)';ctx.shadowBlur=9;ctx.shadowOffsetX=3*f;ctx.shadowOffsetY=5;
+  ctx.drawImage(im,-m.w/2,-m.h);ctx.restore();
+  return {pt:(fx,fy)=>({x:o.x+(fx*m.w-m.w/2)*s*f,y:o.y+(o.bob||0)+(fy*m.h-m.h)*s})};
+}
+const EX_LAMP={pemantik1:[.87,.13],pemantik2:[.935,.135]};
+/* soul light: the only colour in the book */
+let AMB=null,PALE=null,TINT=null;
+const VIS_TOP=410;                      // the valance hides everything above this line
+function glowSprite(c0,c1){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');
+  const r=g.createRadialGradient(64,64,0,64,64,64);r.addColorStop(0,c0);r.addColorStop(.18,c1);r.addColorStop(.5,c1.replace(/[\d.]+\)$/,'0.12)'));r.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=r;g.fillRect(0,0,128,128);return c}
+function soul(ctx,x,y,r,a){
+  if(a<=0)return;AMB=AMB||glowSprite('rgba(255,236,180,1)','rgba(255,170,60,.55)');
+  TINT=TINT||glowSprite('rgba(255,170,60,.9)','rgba(232,128,30,.5)');
+  a=Math.min(1,a);ctx.save();ctx.globalAlpha=a*.55;ctx.drawImage(TINT,x-r*.8,y-r*.8,r*1.6,r*1.6);
+  ctx.globalCompositeOperation='lighter';ctx.globalAlpha=a;ctx.drawImage(AMB,x-r,y-r,r*2,r*2);ctx.restore();
+  ctx.save();ctx.globalAlpha=a;ctx.fillStyle='rgba(255,248,226,.95)';ctx.beginPath();ctx.arc(x,y,Math.max(1.4,r*.07),0,7);ctx.fill();ctx.restore();
+}
+function paleLight(ctx,x,y,r,a){if(a<=0)return;PALE=PALE||glowSprite('rgba(255,250,236,1)','rgba(255,240,210,.45)');
+  ctx.save();ctx.globalAlpha=Math.min(1,a)*.35;ctx.fillStyle='rgba(255,236,190,1)';ctx.beginPath();ctx.arc(x,y,r*.18,0,7);ctx.fill();
+  ctx.globalCompositeOperation='lighter';ctx.globalAlpha=Math.min(1,a);ctx.drawImage(PALE,x-r,y-r,r*2,r*2);ctx.restore()}
+function shadowOf(ctx,x,y,draw,skew,squash,alpha){
+  // a figure's shadow laid flat on the floor from its feet; canvas filters are not everywhere, so only when available
+  if(typeof ctx.filter!=='string'||alpha<=0)return;
+  ctx.save();ctx.translate(x,y);ctx.filter='brightness(0) blur(2px)';ctx.globalAlpha=alpha;ctx.transform(1,0,skew,squash,0,0);draw();ctx.restore();
+}
+
+/* ---------- scenery pieces drawn in code ---------- */
+function wallpaper(ctx,dark=0){
+  ink(ctx,c=>c.rect(OP.x,OP.y,OP.w,OP.h),{fill:PAPER,h:[90,7,.18+dark*.2],lw:0});
+  for(let x=OP.x+40;x<OP.x+OP.w;x+=86){line(ctx,[[x,OP.y],[x,BASE-120]],.8,.35)}
+  ink(ctx,c=>c.rect(OP.x,BASE-120,OP.w,6),{fill:PAPER_D,lw:1.2});
+  ink(ctx,c=>c.rect(OP.x,BASE-114,OP.w,OP.y+OP.h-BASE+114),{fill:PAPER_D,h:[0,5,.3],lw:0});
+  for(let x=OP.x;x<OP.x+OP.w;x+=58)line(ctx,[[x,BASE-114],[x,BASE+60]],.9,.5);
+}
+function floorBoards(ctx){ink(ctx,c=>c.rect(OP.x,BASE-6,OP.w,90),{fill:PAPER_D,h:[0,4,.35],lw:1.4})}
+function windowFrame(ctx,x,y,w,h,t,night=1,soot=0,st){
+  // night outside, seen through the panes
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  ctx.fillStyle=`rgb(${78-night*20},${80-night*20},${96-night*18})`;ctx.fillRect(x,y,w,h);
+  ctx.fillStyle=hatch(ctx,0,4,.25);ctx.fillRect(x,y,w,h);
+  if(soot){st.soot=st.soot||Array.from({length:46},()=>({x:Math.random(),y:Math.random(),v:.04+Math.random()*.05,s:1+Math.random()*2.2,ph:Math.random()*6}));
+    for(const p of st.soot){p.y+=p.v*.016;if(p.y>1.05){p.y=-.05;p.x=Math.random()}
+      ctx.fillStyle='rgba(18,12,10,.85)';ctx.beginPath();ctx.arc(x+(p.x+Math.sin(t*.8+p.ph)*.02)*w,y+p.y*h,p.s,0,7);ctx.fill()}}
+  ctx.restore();
+  // the frame
+  ink(ctx,c=>{c.rect(x-14,y-14,w+28,h+28);c.rect(x,y,w,h)},{fill:PAPER_D,h:[35,4,.4],lw:1.6,evenodd:true});
+  ctx.save();ctx.fillStyle='rgba(43,29,20,.9)';ctx.fillRect(x+w/2-3,y,6,h);ctx.fillRect(x,y+h/2-3,w,6);ctx.fillRect(x,y+h/4-2,w,3);ctx.fillRect(x,y+h*3/4-2,w,3);ctx.restore();
+  ink(ctx,c=>c.rect(x-24,y+h+14,w+48,12),{fill:PAPER,h:[0,4,.3],lw:1.4});
+}
+function bed(ctx,x0,x1,top){
+  const legH=46;
+  ink(ctx,c=>c.rect(x0,top+22,x1-x0,26),{fill:PAPER_D,h:[0,4,.4]});                        // frame
+  ink(ctx,c=>{c.rect(x0+6,top+48,12,legH);c.rect(x1-18,top+48,12,legH)},{fill:PAPER_D,h:[90,3,.5]});
+  ink(ctx,c=>{c.moveTo(x1-10,top+22);c.lineTo(x1-10,top-70);c.quadraticCurveTo(x1+6,top-82,x1+6,top-60);c.lineTo(x1+6,top+22);c.closePath()},{fill:PAPER_D,h:[90,4,.45]});
+  ink(ctx,c=>{c.moveTo(x0+4,top+22);c.lineTo(x0+4,top-40);c.quadraticCurveTo(x0-10,top-50,x0-10,top-30);c.lineTo(x0-10,top+22);c.closePath()},{fill:PAPER_D,h:[90,4,.45]});
+  ink(ctx,c=>c.ellipse(x0+46,top+2,40,16,0,0,7),{fill:PAPER,h:[20,6,.18]});                  // pillow
+  return top+48+legH;
+}
+function blanket(ctx,x0,x1,top){
+  ink(ctx,c=>{c.moveTo(x0+70,top-6);c.bezierCurveTo(x0+150,top-34,x1-90,top-26,x1-14,top-10);c.lineTo(x1-4,top+34);c.lineTo(x0+66,top+34);c.closePath()},{fill:PAPER,h:[-30,6,.22],h2:[60,9,.12]});
+  for(let i=1;i<5;i++){const x=x0+70+(x1-x0-80)*i/5;line(ctx,[[x,top-14],[x+10,top+30]],.9,.5)}
+}
+function scaleBase(ctx,x0,x1,top,needleA){
+  ink(ctx,c=>c.rect(x0,top,x1-x0,16),{fill:PAPER_D,h:[0,3,.45]});
+  const cx=(x0+x1)/2;
+  ink(ctx,c=>{c.moveTo(cx-60,top+16);c.lineTo(cx-90,BASE);c.lineTo(cx+90,BASE);c.lineTo(cx+60,top+16);c.closePath()},{fill:PAPER_D,h:[90,4,.35],shade:[cx-90,cx+90,.25]});
+  const dy=top+16+(BASE-top-16)*.48;
+  piece(ctx,'compass',cx,dy,104,{ax:.5,ay:.5});
+  ctx.save();ctx.translate(cx,dy);ctx.rotate(needleA);ctx.strokeStyle='rgba(30,18,10,.95)';ctx.lineWidth=2.2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,8);ctx.lineTo(0,-36);ctx.stroke();ctx.fillStyle='rgba(30,18,10,.95)';ctx.beginPath();ctx.arc(0,0,4,0,7);ctx.fill();ctx.restore();
+}
+function clockFace(ctx,x,y,w,hA,mA){
+  piece(ctx,'compass',x,y,w,{ax:.5,ay:.5});
+  ctx.save();ctx.translate(x,y);ctx.strokeStyle='rgba(30,18,10,.95)';ctx.lineCap='round';
+  ctx.lineWidth=w*.03;ctx.rotate(hA);ctx.beginPath();ctx.moveTo(0,w*.05);ctx.lineTo(0,-w*.2);ctx.stroke();ctx.rotate(mA-hA);ctx.lineWidth=w*.018;ctx.beginPath();ctx.moveTo(0,w*.06);ctx.lineTo(0,-w*.3);ctx.stroke();ctx.restore();
+}
+function doorway(ctx,x,w,h,open,inside='#1d140f',light=0,wallTop,wallFill='#cdb994'){
+  const y=BASE-h,wt=wallTop??y-90,wx0=x-60,wx1=x+w+60;
+  const arch=c=>{c.moveTo(x,BASE);c.lineTo(x,y+w/2);c.arc(x+w/2,y+w/2,w/2,Math.PI,0);c.lineTo(x+w,BASE);c.closePath()};
+  ink(ctx,c=>{c.rect(wx0,wt,wx1-wx0,BASE-wt);arch(c)},{fill:wallFill,h:[0,9,.45],shade:[wx0,wx1,.35],lw:1.6});
+  ctx.save();ctx.beginPath();ctx.rect(wx0,wt,wx1-wx0,BASE-wt);ctx.clip();
+  for(let yy=BASE-9,r=0;yy>wt;yy-=18,r++)for(let xx=wx0+(r%2)*16;xx<wx1;xx+=32){if(xx>x-4&&xx<x+w+4&&yy>y)continue;line(ctx,[[xx,yy],[xx,yy-9]],.8,.5)}
+  ctx.restore();
+  // timber: posts and a lintel framing the door
+  ink(ctx,c=>{c.rect(x-14,y-10,14,h+10);c.rect(x+w,y-10,14,h+10);c.rect(x-24,y-28,w+48,18)},{fill:'#b39c74',h:[90,3,.5],lw:1.4});
+  ink(ctx,c=>c.rect(wx0-6,wt-14,wx1-wx0+12,16),{fill:'#b39c74',h:[0,3,.5],lw:1.4});
+  ink(ctx,arch,{fill:inside,lw:2});
+  if(light>0){ctx.save();ctx.beginPath();arch(ctx);ctx.clip();
+    const g=ctx.createLinearGradient(0,y,0,BASE);g.addColorStop(0,`rgba(214,200,172,${light*.55})`);g.addColorStop(1,`rgba(240,226,198,${light*.85})`);ctx.fillStyle=g;ctx.fill();ctx.restore()}
+  const ow=w*Math.cos(open*Math.PI*.46);
+  if(ow>2){ink(ctx,c=>{c.moveTo(x,BASE);c.lineTo(x,y+w/2);c.quadraticCurveTo(x,y,x+ow/2,y);c.quadraticCurveTo(x+ow,y,x+ow,y+w/2);c.lineTo(x+ow,BASE);c.closePath()},{fill:'#c8b28b',h:[90,6,.45],shade:[x,x+ow,.2+open*.3]});
+    for(let i=1;i<4;i++)line(ctx,[[x+ow*i/4,y+24],[x+ow*i/4,BASE-4]],.8,.55);
+    ink(ctx,c=>{c.rect(x+4,y+h*.3,ow-8,8);c.rect(x+4,y+h*.75,ow-8,8)},{fill:'#8a7556',lw:1});
+    ctx.save();ctx.fillStyle='rgba(43,29,20,.9)';ctx.beginPath();ctx.arc(x+ow*.82,y+h*.55,4,0,7);ctx.fill();ctx.restore()}
+}
+function gravestone(ctx,x,w,h,kind){
+  ink(ctx,c=>{if(kind===1){c.moveTo(x-w/2,BASE);c.lineTo(x-w/2,BASE-h+w/2);c.arc(x,BASE-h+w/2,w/2,Math.PI,0);c.lineTo(x+w/2,BASE);c.closePath()}
+    else if(kind===2){c.rect(x-w*.12,BASE-h,w*.24,h);c.rect(x-w/2,BASE-h*.75,w,w*.24)}
+    else{c.moveTo(x-w/2,BASE);c.lineTo(x-w/2,BASE-h*.8);c.lineTo(x,BASE-h);c.lineTo(x+w/2,BASE-h*.8);c.lineTo(x+w/2,BASE);c.closePath()}},
+    {fill:PAPER_D,h:[60,5,.3],shade:[x-w/2,x+w/2,.4]});
+  if(kind!==2){line(ctx,[[x-w*.28,BASE-h*.55],[x+w*.28,BASE-h*.55]],.9,.6);line(ctx,[[x-w*.22,BASE-h*.45],[x+w*.22,BASE-h*.45]],.9,.5)}
+}
+function hill(ctx,y,amp,seed,shade,t=0){
+  ink(ctx,c=>{c.moveTo(OP.x-20,OP.y+OP.h+20);c.lineTo(OP.x-20,y);
+    for(let x=OP.x-20,i=seed;x<OP.x+OP.w+40;x+=120,i++){const h=amp*(.5+((i*53)%40)/50);c.bezierCurveTo(x+30,y-h,x+90,y-h,x+120,y)}
+    c.lineTo(OP.x+OP.w+40,OP.y+OP.h+20);c.closePath()},{fill:shade,h:[0,5,.28],lw:1.5});
+  ctx.save();for(let x=OP.x;x<OP.x+OP.w;x+=9){const yy=y+6+((x*7)%13);line(ctx,[[x,yy],[x+2+Math.sin(t+x)*1.5,yy-6]],.7,.45)}ctx.restore();
+}
+function tower(ctx,x,base,top,w,glowA){
+  const dw=w*1.5,dy=top-dw*.55;
+  ink(ctx,c=>{c.moveTo(x-w*.62,base);c.lineTo(x-w/2,top);c.lineTo(x+w/2,top);c.lineTo(x+w*.62,base);c.closePath()},{fill:PAPER_D,h:[0,6,.32],shade:[x-w*.6,x+w*.6,.45]});
+  for(let yy=top+40;yy<base;yy+=60)line(ctx,[[x-w*.5-(yy-top)/(base-top)*w*.12,yy],[x+w*.5+(yy-top)/(base-top)*w*.12,yy]],.9,.55);
+  ctx.save();ctx.beginPath();ctx.ellipse(x,top,dw/2,dw*.6,0,Math.PI,0);ctx.closePath();ctx.clip();
+  ctx.fillStyle='rgba(60,46,36,.8)';ctx.fillRect(x-dw,top-dw,dw*2,dw);
+  for(let r=0;r<6;r++)for(let q=-6;q<7;q++){const cx=x+q*dw*.13+(r%2)*dw*.065,cy=top-8-r*dw*.1;soul(ctx,cx,cy,dw*.12,glowA*(.5+.5*Math.sin(r*3.1+q*1.7+performance.now()/900)))}
+  ctx.restore();
+  ink(ctx,c=>{c.ellipse(x,top,dw/2,dw*.6,0,Math.PI,0)},{fill:'rgba(0,0,0,0)',lw:2});
+  for(let k=-2;k<=2;k++)line(ctx,[[x+k*dw*.18,top],[x+k*dw*.09,top-dw*.58]],1,.7);
+  line(ctx,[[x,top-dw*.6],[x,top-dw*.6-18]],1.6,.9);
+}
+function dock(ctx,x0,x1,y,poleX,notch=0,mist=0,t=0,fromRight=false){
+  const edge=fromRight?x1-110:x0+110;
+  // the city's underside: dressed stone that ends in rough rock
+  ink(ctx,c=>{if(!fromRight){c.moveTo(OP.x-20,y+18);c.lineTo(edge,y+18);c.lineTo(edge-20,y+90);c.lineTo(edge-70,y+150);c.lineTo(OP.x+20,y+210);c.lineTo(OP.x-20,y+230)}
+      else{c.moveTo(OP.x+OP.w+20,y+18);c.lineTo(edge,y+18);c.lineTo(edge+20,y+90);c.lineTo(edge+70,y+150);c.lineTo(OP.x+OP.w-20,y+210);c.lineTo(OP.x+OP.w+20,y+230)}c.closePath()},
+    {fill:'#bba887',h:[0,7,.4],h2:[60,9,.25],lw:1.6});
+  ink(ctx,c=>c.rect(x0,y,x1-x0,18),{fill:PAPER_D,h:[0,3,.45]});
+  for(let x=x0;x<x1;x+=26)line(ctx,[[x,y],[x,y+18]],.7,.45);
+  // diagonal struts back to the stone
+  const free=fromRight?[x0,edge]:[edge,x1];
+  for(let x=free[0]+50;x<free[1]-10;x+=110){const bx=fromRight?Math.min(x+90,edge):Math.max(x-90,edge);ink(ctx,c=>{c.moveTo(x,y+18);c.lineTo(x+4,y+18);c.lineTo(bx+4,y+86);c.lineTo(bx,y+86);c.closePath()},{fill:PAPER_D,lw:1.2})}
+  if(poleX!=null){
+    const top=y-230,bot=y+280;ink(ctx,c=>c.rect(poleX-9,top,18,bot-top),{fill:PAPER,h:[90,3,.35],shade:[poleX-9,poleX+9,.35]});
+    ink(ctx,c=>c.rect(poleX-14,top-8,28,10),{fill:PAPER_D,lw:1.2});
+    // a notch every year where the cloud line stood; the gaps widen as the city sinks faster
+    let yy=bot-20,gap=9;for(let i=0;i<15&&yy>y+24;i++){line(ctx,[[poleX-9,yy],[poleX+7,yy]],1.3,.9);yy-=gap;gap*=1.12}
+    if(mist>0){const g=ctx.createLinearGradient(0,y+120,0,bot);g.addColorStop(0,'rgba(232,226,212,0)');g.addColorStop(1,`rgba(232,226,212,${mist})`);ctx.fillStyle=g;ctx.fillRect(OP.x,y+100,OP.w,bot-y)}
+  }
+}
+function gear(ctx,x,y,R,teeth,ang,dark=0){
+  ink(ctx,c=>{for(let i=0;i<teeth*2;i++){const a=ang+i/(teeth*2)*Math.PI*2,r=i%2?R:R*.86;const a2=ang+(i+1)/(teeth*2)*Math.PI*2;c.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r);c.lineTo(x+Math.cos(a2)*r,y+Math.sin(a2)*r)}c.closePath();
+      c.moveTo(x+R*.62,y);c.arc(x,y,R*.62,0,Math.PI*2,true)},{fill:PAPER_D,h:[40,5,.35+dark],shade:[x-R,x+R,.35]});
+  for(let k=0;k<6;k++){const a=ang+k*Math.PI/3;ink(ctx,c=>{c.save();c.translate(x,y);c.rotate(a);c.rect(R*.1,-R*.05,R*.55,R*.1);c.restore()},{fill:PAPER_D,h:[0,3,.4],lw:1.2})}
+  ink(ctx,c=>c.arc(x,y,R*.14,0,7),{fill:PAPER,h:[0,3,.4]});
+}
+function shelf(ctx,x,y,w,h,seed,dark){
+  ink(ctx,c=>c.rect(x,y,w,h),{fill:PAPER_D,h:[90,4,.4+dark],lw:1.6});
+  const rows=Math.max(3,Math.round(h/82));const rh=(h-16)/rows;
+  for(let r=0;r<rows;r++){const yb=y+10+rh*(r+1);
+    ink(ctx,c=>c.rect(x+4,yb-4,w-8,6),{fill:PAPER_D,lw:1});
+    let xx=x+8,i=seed*7+r*13;
+    while(xx<x+w-14){const bw=8+((i*37)%9),bh=rh*(.62+((i*53)%30)/100);if(xx+bw>x+w-8)break;
+      ink(ctx,c=>c.rect(xx,yb-4-bh,bw,bh),{fill:i%3?PAPER:PAPER_D,h:[90,3,.25+dark],lw:.9});
+      line(ctx,[[xx+2,yb-4-bh*.8],[xx+bw-2,yb-4-bh*.8]],.6,.6);xx+=bw+1;i++}
+  }
+  if(dark>0){ctx.save();ctx.fillStyle=`rgba(30,18,10,${dark*.9})`;ctx.fillRect(x,y,w,h);ctx.restore()}
+}
+/* the honeycomb of glass cells: lattice cached, lights drawn live */
+function hexPath(c,x,y,r){for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;i?c.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r):c.moveTo(x+Math.cos(a)*r,y+Math.sin(a)*r)}c.closePath()}
+function makeComb(r,seed){
+  const cells=[];const dx=r*Math.sqrt(3),dy=r*1.5;
+  for(let row=0,y=OP.y+r*.4;y<OP.y+OP.h+r;row++,y+=dy)for(let x=OP.x-r+(row%2)*dx/2;x<OP.x+OP.w+r;x+=dx){
+    const k=Math.sin(x*12.9898+y*78.233+seed)*43758.5453,f=k-Math.floor(k);
+    cells.push({x,y,b:f<.12?.08:f<.4?.35:f<.85?.7:1,ph:f*40,w:.6+f*1.2})}
+  return cells;
+}
+function drawCombLattice(ctx,cells,r,dark){
+  ctx.save();ctx.fillStyle=`rgba(30,20,14,${.82+dark*.1})`;ctx.fillRect(OP.x,OP.y,OP.w,OP.h);
+  for(const c of cells){ctx.beginPath();hexPath(ctx,c.x,c.y,r*.92);ctx.fillStyle='rgba(54,40,30,.9)';ctx.fill();
+    ctx.strokeStyle='rgba(200,170,120,.55)';ctx.lineWidth=Math.max(1,r*.07);ctx.stroke();
+    ctx.fillStyle='rgba(176,140,80,.85)';ctx.fillRect(c.x-r*.28,c.y+r*.5,r*.56,r*.16)}
+  ctx.restore();
+}
+function combLights(ctx,cells,r,t,mul,speed=1,except){
+  for(const c of cells){if(c===except)continue;
+    const a=c.b*mul*(.7+.3*Math.sin(t*c.w*speed+c.ph));soul(ctx,c.x,c.y-r*.08,r*1.25,a)}
+}
+
+/* ---------- the scenes ---------- */
+/* sprites from the second and third scenery sheets: sizes and landmarks measured from the cut-outs */
+const SC2={"house": {"w": 271, "h": 348, "holes": [[104, 150, 178, 333]]}, "door": {"w": 100, "h": 207}, "bed": {"w": 388, "h": 232}, "scale": {"w": 325, "h": 248}, "window": {"w": 164, "h": 271, "holes": [[68, 22, 100, 74], [31, 36, 60, 74], [107, 36, 135, 74], [29, 81, 60, 126], [68, 81, 100, 126], [107, 82, 138, 126], [29, 134, 60, 181], [68, 134, 100, 181], [107, 134, 138, 181], [29, 189, 60, 240], [68, 189, 100, 240], [107, 189, 138, 240]]}, "grave1": {"w": 192, "h": 218}, "grave2": {"w": 216, "h": 244}, "grave3": {"w": 194, "h": 252}, "jar": {"w": 84, "h": 232}, "dock": {"w": 1031, "h": 357}, "tower": {"w": 223, "h": 841}, "bookcase": {"w": 299, "h": 428}, "stair": {"w": 181, "h": 609}, "gearL": {"w": 264, "h": 261}, "gearS": {"w": 196, "h": 198}, "sprout": {"w": 127, "h": 120}, "hillA": {"w": 679, "h": 98}, "hillB": {"w": 682, "h": 76}};
+function sp(ctx,key,x,y,w,o={}){return piece(ctx,key,x,y,w,o)}
+function domeSouls(ctx,cx,cy,rx,ry,a,t,seed=0){for(let i=0;i<14;i++){const u=Math.sin(i*12.9+seed)*.5+.5,v=Math.sin(i*78.2+seed)*.5+.5;
+  const x=cx+(u*2-1)*rx*.8,y=cy+(v*2-1)*ry*.6;soul(ctx,x,y,rx*.5,a*(.45+.35*Math.sin(t*(.7+u)+i)))}}
+function bedOnScale(ctx,cx,needleA){
+  // the platform scale with its dial, the bed standing on it; returns where a body lies on the mattress
+  const sw=340,k=sw/SC2.scale.w,sh=SC2.scale.h*k,x0=cx-sw/2,y0=BASE-sh;
+  sp(ctx,'scale',cx,BASE+4,sw);
+  const dx=x0+154.5*k,dy=y0+4+110.4*k;
+  ctx.save();ctx.translate(dx,dy);ctx.rotate(needleA);ctx.strokeStyle='rgba(30,18,10,.95)';ctx.lineWidth=2.4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,9);ctx.lineTo(0,-52*k);ctx.stroke();ctx.fillStyle='rgba(30,18,10,.95)';ctx.beginPath();ctx.arc(0,0,4.5,0,7);ctx.fill();ctx.restore();
+  const bw=320,bk=bw/SC2.bed.w,bh=SC2.bed.h*bk,top=y0+10;
+  sp(ctx,'bed',cx,top+4,bw);
+  return {x0:cx-bw/2,x1:cx+bw/2,mattress:top-bh+104*bk};
+}
+function nightPanes(ctx,x,y,w,h,t,st,soot){
+  ctx.save();ctx.fillStyle='#3b3c4c';ctx.fillRect(x,y,w,h);ctx.fillStyle=hatch(ctx,0,4,.3);ctx.fillRect(x,y,w,h);
+  if(soot){st.soot=st.soot||Array.from({length:40},()=>({x:Math.random(),y:Math.random(),v:.04+Math.random()*.05,s:1+Math.random()*2.2,ph:Math.random()*6}));
+    ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+    for(const p of st.soot){p.y+=p.v*.016;if(p.y>1.05){p.y=-.05;p.x=Math.random()}ctx.fillStyle='rgba(16,11,9,.9)';ctx.beginPath();ctx.arc(x+(p.x+Math.sin(t*.8+p.ph)*.02)*w,y+p.y*h,p.s,0,7);ctx.fill()}}
+  ctx.restore();
+}
+function windowSprite(ctx,cx,top,w,t,st,soot){const k=w/SC2.window.w,h=SC2.window.h*k;nightPanes(ctx,cx-w*.4,top+h*.06,w*.8,h*.84,t,st,soot);sp(ctx,'window',cx,top+h,w);return {x:cx,y:top+h*.45}}
+
+function smallCompass(ctx,st,cx,cy,cw,target,dt,spin){
+  piece(ctx,'compass',cx,cy,cw,{ax:.5,ay:.5});
+  const a=spin!=null?spin:needleStep(st,target,dt);
+  piece(ctx,'needle',cx,cy,cw*.135,{ax:.5,ay:.5,rot:a});return a;
+}
+function skyWash(ctx,top,mid,bot,hatchA=.18){
+  const g=ctx.createLinearGradient(0,OP.y,0,OP.y+OP.h);g.addColorStop(0,top);g.addColorStop(.55,mid);g.addColorStop(1,bot);
+  ctx.fillStyle=g;ctx.fillRect(OP.x,OP.y,OP.w,OP.h);ctx.fillStyle=hatch(ctx,0,5,hatchA);ctx.fillRect(OP.x,OP.y,OP.w,OP.h*.55);
+}
+function softCloudBand(ctx,key,y,w,speed,t){
+  // a cloud bank: the printed edge on top, its body fading down into mist (no hard rectangle)
+  const g=ctx.createLinearGradient(0,y-6,0,y+160);g.addColorStop(0,'rgba(236,230,216,.95)');g.addColorStop(1,'rgba(236,230,216,0)');
+  ctx.fillStyle=g;ctx.fillRect(OP.x,y-6,OP.w,166);cloudBand(ctx,key,y,w,speed,t);
+}
+/* Kejora's notebook: closed (leather) or open (two ruled pages), held at (x,y) */
+function noteBook(ctx,x,y,a,open,k=1){
+  ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.scale(k,k);
+  if(open){
+    ink(ctx,c=>{c.moveTo(-19,-11);c.quadraticCurveTo(-9,-14,0,-10);c.quadraticCurveTo(9,-14,19,-11);c.lineTo(19,10);c.quadraticCurveTo(9,7,0,11);c.quadraticCurveTo(-9,7,-19,10);c.closePath()},{fill:PAPER,lw:1.1});
+    for(let i=0;i<4;i++){line(ctx,[[-16,-5+i*4],[-3,-4+i*4]],.6,.45);line(ctx,[[3,-4+i*4],[16,-5+i*4]],.6,.45)}
+    line(ctx,[[0,-10],[0,11]],.9,.8);
+  }else{
+    ink(ctx,c=>c.rect(-9,-13,18,26),{fill:'#5b3726',h:[45,3.5,.35],lw:1.2});
+    line(ctx,[[-7,-13],[-7,13]],.7,.6);
+  }
+  ctx.restore();
+}
+const walkBob=(t,on,ph=0)=>on?-Math.abs(Math.sin(t*6+ph))*5:0;
+Object.assign(SCENES,{
+3:{draw(ctx,t,st,dt){
+  // Pengantaran. The procession walks along the front of the house; Gaharu climbs the step into the doorway,
+  // the dark inside takes him, and he comes back out the same doorway with the silver lantern lit.
+  backdrop(ctx,t);cloudBand(ctx,'cloudB',930,700,5,t);cloudBand(ctx,'cloudA',975,760,8,t+30);
+  nightWash(ctx,.5);
+  ink(ctx,c=>c.rect(OP.x,BASE-10,OP.w,80),{fill:PAPER_D,h:[0,4,.4],lw:1.4});
+  for(let x=OP.x+10;x<OP.x+OP.w;x+=30)line(ctx,[[x,BASE-10],[x+8,BASE+40]],.7,.35);
+  // the house stands far enough left that its whole doorway is inside the proscenium
+  const HW=540,hk=HW/SC2.house.w,HH=SC2.house.h*hk,HX=640,hx0=HX-HW/2,hy0=BASE+6-HH;
+  const PH=H0*.82;
+  const [d0,d1,d2,d3]=SC2.house.holes[0],DX=hx0+d0*hk,DY=hy0+d1*hk,DW=(d2-d0)*hk,DH=(d3-d1)*hk,DC=DX+DW/2,SILL=DY+DH;
+  const door=tw(t,4.6,5.8,0,1)-tw(t,7.6,8.6,0,1)+tw(t,10,11,0,1)-tw(t,13,14,0,1);
+  // Gaharu: along the street to the door, up the step, through the doorway; later out again, facing home
+  const out=t>10.4;
+  const gx=t<5.6?tw(t,.3,5.6,-150,DC,E.lin):t<12.2?DC:tw(t,12.2,20.2,DC,-200,E.lin);
+  const walking=t<5.6||t>12.2;
+  const step=t<10.4?tw(t,5.6,6.3,0,1):tw(t,11.6,12.2,1,0);        // 0 on the street, 1 standing on the sill
+  const deep=t<10.4?tw(t,6.3,7.3,0,1):tw(t,10.6,11.6,1,0);         // how far past the wall into the dark
+  const behind=deep>0;
+  const sc=1-.1*step-.12*deep;
+  const G={x:gx,y:lerp(BASE,SILL,step)-deep*6,h:PH*sc,face:out?-1:1,bob:walkBob(t,walking)-Math.sin(clamp(step,0,1)*Math.PI)*6*(step>0&&step<1?1:0),
+    rock:walking?Math.sin(t*6)*1.2:0};
+  const lp=charPt('gaharu',G,...GAHARU_LAMP);
+  // inside the doorway: the dark room, a little candlelight when the door stands open, and Gaharu once he has crossed in
+  ctx.save();ctx.beginPath();ctx.rect(DX,DY,DW,DH);ctx.clip();
+  ink(ctx,c=>c.rect(DX,DY,DW,DH),{fill:'#1a120d',lw:0});paleLight(ctx,DX+DW*.6,DY+DH*.45,60,door*.35);
+  if(behind){puppet(ctx,'gaharu',G);ctx.fillStyle=`rgba(20,13,9,${(deep*.92).toFixed(3)})`;ctx.fillRect(DX,DY,DW,DH)}
+  ctx.restore();
+  sp(ctx,'house',HX,BASE+6,HW);
+  // the door leaf, hinged on the left of the opening, swinging toward us
+  const ow=DW*Math.cos(door*Math.PI*.46);if(ow>1)sp(ctx,'door',DX+ow/2,DY+DH+2,ow*1.04,{ax:.5,ay:1});
+  const p1x=t<5.4?tw(t,.3,5.4,-320,DX-70,E.lin):t<12.6?DX-70:tw(t,12.6,20.6,DX-70,-240,E.lin);
+  const p2x=t<5.7?tw(t,.3,5.7,-480,DX-170,E.lin):t<13.2?DX-170:tw(t,13.2,21.6,DX-170,-300,E.lin);
+  extra(ctx,'pemantik1',{x:p1x,y:BASE,h:PH*1.02,face:t>12.6?-1:1,bob:walkBob(t,t<5.4||t>12.6,1)});
+  extra(ctx,'pemantik2',{x:p2x,y:BASE,h:PH*.98,face:t>13.2?-1:1,bob:walkBob(t,t<5.7||t>13.2,2)});
+  if(!behind)puppet(ctx,'gaharu',G);
+  // Suluh, nearest to us, watches the lantern pass
+  const S={x:175,y:BASE+26,h:H0*1.05,head:out?clamp((gx-175)/300,-1,1)*10:tw(t,1,3,0,8),upper:-6,track:[['grip',.68,.42]]};
+  const s=puppet(ctx,'suluh',S);let L=null;if(s.grip)L=hangLantern(ctx,st,'sl',toStage(ctx,s.grip),s.s,dt);
+  nightWash(ctx,.22);
+  if(L)paleLight(ctx,L.x,L.y,70,.55);
+  if(out)soul(ctx,lp.x,lp.y+10,74*sc,tw(t,10.6,11.8,0,1)*(.88+.12*Math.sin(t*3))*(1-deep*.5));
+}},
+4:{draw(ctx,t,st,dt){
+  // Kawat ke Bawah Awan: a tall cross-section — the dock, the cloud layers, the dark beneath
+  const g=ctx.createLinearGradient(0,OP.y,0,OP.y+OP.h);g.addColorStop(0,'#55536a');g.addColorStop(.45,'#bdb3a2');g.addColorStop(.75,'#6a6157');g.addColorStop(1,'#16110e');
+  ctx.fillStyle=g;ctx.fillRect(OP.x,OP.y,OP.w,OP.h);ctx.fillStyle=hatch(ctx,0,5,.18);ctx.fillRect(OP.x,OP.y,OP.w,OP.h);
+  const dockY=660,dw=560,dk=dw/SC2.dock.w,reelX=OP.x+30+dw-30;
+  softCloudBand(ctx,'cloudA',780,760,6,t);softCloudBand(ctx,'cloudB',860,700,-9,t);softCloudBand(ctx,'cloudA',940,820,11,t+40);
+  const g2=ctx.createLinearGradient(0,960,0,OP.y+OP.h);g2.addColorStop(0,'rgba(18,13,10,0)');g2.addColorStop(1,'rgba(18,13,10,.9)');ctx.fillStyle=g2;ctx.fillRect(OP.x,960,OP.w,140);
+  // the jar: lowered a long time, stops on something, comes back up wet
+  const jtop=dockY+20,jy=t<1.5?jtop:t<8?tw(t,1.5,8,jtop,960,E.io):t<9.6?960:t<15?tw(t,9.6,15,960,jtop,E.io):jtop;
+  const jw=44,jk=jw/SC2.jar.w,jh=SC2.jar.h*jk;
+  sp(ctx,'jar',reelX,jy+jh,jw);
+  if(t>9.6){ctx.save();ctx.fillStyle='rgba(42,30,22,.9)';ctx.fillRect(reelX-jw*.36,jy+jh*.7,jw*.72,jh*.22);ctx.fillStyle='#efe6d0';ctx.beginPath();ctx.ellipse(reelX+3,jy+jh*.74,3.5,2.4,.3,0,7);ctx.fill();ctx.restore();
+    st.drops=st.drops||[];if(Math.random()<.3&&jy>jtop+30&&t<15)st.drops.push({x:reelX+(Math.random()-.5)*30,y:jy+jh,v:0})}
+  if(st.drops){for(const d of st.drops){d.v+=G_STAGE*.35*dt;d.y+=d.v*dt;line(ctx,[[d.x,d.y],[d.x,d.y+6]],1.2,.7)}st.drops=st.drops.filter(d=>d.y<OP.y+OP.h)}
+  // the city's stone edge, and the dock jutting from it (the pole stands at the landward end)
+  ink(ctx,c=>{c.moveTo(OP.x-20,dockY+10);c.lineTo(OP.x+170,dockY+10);c.lineTo(OP.x+150,dockY+90);c.lineTo(OP.x+90,dockY+160);c.lineTo(OP.x+10,dockY+220);c.lineTo(OP.x-20,dockY+240);c.closePath()},{fill:'#bba887',h:[0,7,.4],h2:[60,9,.25],lw:1.6});
+  sp(ctx,'dock',OP.x+30+dw/2,dockY-245*dk+SC2.dock.h*dk,dw,{flip:true});
+  // hand over hand: paying out, holding still when it touches, hauling up
+  const working=t>1.5&&t<15&&!(t>8&&t<9.6),pull=working?Math.sin(t*(t<8?3.2:4.2)):0;
+  const K={x:585,y:dockY,h:225,upper:-62+pull*16,lower:-24-pull*10,head:tw(t,8,9,0,12)-tw(t,10,11,0,12),scarf:Math.sin(t*2)*6,track:[['hand',.86,.52]]};
+  const kp=puppet(ctx,'kejora',K);
+  if(kp.hand){const h=toStage(ctx,kp.hand),ex=reelX-6,ey=dockY-2,sag=8+3*Math.sin(t*1.7);
+    ctx.save();ctx.strokeStyle='rgba(43,29,20,.9)';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(h.x,h.y);ctx.quadraticCurveTo((h.x+ex)/2,Math.max(h.y,ey)+sag,ex,ey);ctx.lineTo(reelX,jy);ctx.stroke();
+    // a little coil of spare rope on the planks behind him
+    ctx.beginPath();ctx.ellipse(h.x-70,dockY-5,16,4,0,0,7);ctx.ellipse(h.x-70,dockY-7,12,3,0,0,7);ctx.stroke();ctx.restore()}
+  const s=puppet(ctx,'suluh',{x:400,y:dockY,h:235,head:tw(t,1.5,3,0,12),upper:-8,track:[['grip',.68,.42]]});
+  if(s.grip){const L=hangLantern(ctx,st,'sl',toStage(ctx,s.grip),s.s,dt);if(L)paleLight(ctx,L.x,L.y,60,.55)}
+}},
+5:{draw(ctx,t,st,dt){
+  // Musim Batuk: a narrow room over the clock shop; the bed stands on the big scale
+  wallpaper(ctx);floorBoards(ctx);
+  windowSprite(ctx,230,440,170,t,st,true);
+  const cough=[2,5.5,9,13,16.5].some(c=>t>c&&t<c+.9);
+  st.nd=st.nd||{a:0,v:0};st.nd.v+=(-st.nd.a*30-st.nd.v*2.4)*dt+(cough?Math.sin(t*30)*.4:0);st.nd.a+=st.nd.v*dt;
+  const B=bedOnScale(ctx,610,.25+st.nd.a),my=B.mattress;
+  puppet(ctx,'kejora',{x:B.x1-28,y:my,h:262,rock:-90,head:-10+(cough?Math.sin(t*25)*4:0),upper:tw(t,8.5,9.4,0,30)-tw(t,11.6,12.4,0,30),bob:cough?-Math.abs(Math.sin(t*20))*4:0});
+  ink(ctx,c=>{c.moveTo(B.x0+104,my+44);c.bezierCurveTo(B.x0+116,my-20,B.x0+190,my-34,B.x0+226,my-64);c.quadraticCurveTo(B.x0+256,my-88,B.x0+284,my-48);c.quadraticCurveTo(B.x1-10,my-16,B.x1-4,my+46);c.closePath()},{fill:PAPER,h:[-30,6,.22],h2:[60,9,.12]});
+  const s=puppet(ctx,'suluh',{x:370,y:BASE,h:H0,head:tw(t,1,2,0,10),upper:tw(t,8.6,9.6,0,-45)-tw(t,12.4,13.2,0,-30),track:[['grip',.7,.5]]});
+  if(t>9.4&&t<13){const k=clamp((t-9.4)/1.6,0,1),hp=s.grip?toStage(ctx,s.grip):{x:420,y:700},x=lerp(B.x0+80,hp.x,k),y=lerp(my-10,hp.y,k)-Math.sin(k*Math.PI)*40;
+    ink(ctx,c=>c.ellipse(x,y,7,5,.4,0,7),{fill:'#3a2a1c',lw:1});paleLight(ctx,x-2,y-2,18,.6)}
+  nightWash(ctx,.42);
+}},
+6:{draw(ctx,t,st,dt){
+  // Dua Puluh Satu Gram
+  wallpaper(ctx,.3);floorBoards(ctx);
+  [[180,470,90],[290,448,70],[396,476,96],[506,452,74]].forEach(([x,y,w])=>clockFace(ctx,x,y,w,173*Math.PI/180,282*Math.PI/180));
+  windowSprite(ctx,175,540,110,t,st,false);
+  const doorOpen=tw(t,7,8.2,0,1)-tw(t,15.6,16.8,0,1);
+  doorway(ctx,650,120,440,doorOpen,'#16100c',0,500);
+  const na=.25-tw(t,2.6,2.75,0,.035);
+  const B=bedOnScale(ctx,430,na),my=B.mattress;
+  puppet(ctx,'kejora',{x:B.x1-28,y:my,h:262,rock:-90,head:-14});
+  ink(ctx,c=>{c.moveTo(B.x0+104,my+44);c.bezierCurveTo(B.x0+116,my-20,B.x0+190,my-34,B.x0+226,my-64);c.quadraticCurveTo(B.x0+256,my-88,B.x0+284,my-48);c.quadraticCurveTo(B.x1-10,my-16,B.x1-4,my+46);c.closePath()},{fill:PAPER,h:[-30,6,.22],h2:[60,9,.12]});
+  const sx=B.x0+120,sy=my-120+Math.sin(t*1.6)*6;
+  // Pak Nadi stands at the head of the bed watching the scale's needle, because he cannot look at his daughter.
+  // When the needle slips he starts, then writes it down in her notebook with a shaking hand.
+  {const raise=tw(t,3.6,4.4,0,1)-tw(t,6.8,7.6,0,1),writing=t>4.4&&t<6.8,shake=writing?Math.sin(t*38)*1.4+Math.sin(t*5.3)*2.5:0;
+   const head=t<2.7?13:t<3.6?tw(t,2.7,2.95,13,2):t<7.6?tw(t,3.6,4.4,2,13):t<10.4?tw(t,7.6,8.6,13,0):tw(t,10.4,11.4,0,13);
+   const N={x:205,y:BASE,h:H0,head,upper:-24*raise,lower:-58*raise+shake,bob:Math.sin(t*1.3)*1.2,track:[['wrist',.5,.5],['hand',.84,.6]]};
+   const np=puppet(ctx,'nadi',N);
+   // the notebook stands on his open palm, tilting with his forearm
+   if(np.hand){const h=toStage(ctx,np.hand),w=toStage(ctx,np.wrist),fa=Math.atan2(h.y-w.y,h.x-w.x),op=raise>.5,bk=1.55;
+     noteBook(ctx,h.x,h.y-(op?11:15)*bk,fa*.5,op,bk);
+     if(writing){const px=h.x+4+Math.sin(t*5.3)*7,py=h.y-6;line(ctx,[[px,py],[px+9,py-14]],1.3,.85)}}}
+  const gin=t>7.6,gx=t<7.6?710:t<10?tw(t,7.6,10,710,600):t<12.4?600:tw(t,12.4,15.4,600,830),face=t<12.4?-1:1;
+  const G={x:gx,y:BASE,h:H0,face,bob:walkBob(t,(t>7.6&&t<10)||(t>12.4&&t<15.4)),head:t>10&&t<12.4?8:0};
+  const lp=charPt('gaharu',G,...GAHARU_LAMP),taken=t>11.2;
+  if(gin)shadowOf(ctx,gx,BASE,()=>puppet(ctx,'gaharu',{...G,x:0,y:0,bob:0}),-1.9,.22,.32*doorOpen);
+  const S={x:t<9?640:tw(t,9,10.4,640,350),y:t<9?BASE:tw(t,9,10.4,BASE,BASE+26),h:t<9?H0:tw(t,9,10.4,H0,H0*1.06),face:-1,
+    head:t<4.2?0:t<6.6?tw(t,4.2,5,0,-14):tw(t,6.6,7.4,-14,10)};
+  if(gin)puppet(ctx,'gaharu',G);
+  puppet(ctx,'suluh',S);
+  nightWash(ctx,.38);
+  if(t>3.2&&!taken){const k=clamp((t-10.4)/.8,0,1);soul(ctx,lerp(sx,lp.x,k),lerp(sy,lp.y+10,k),58,tw(t,3.2,4.4,0,1))}
+  if(taken)soul(ctx,lp.x,lp.y+10,70,.9+.1*Math.sin(t*3));
+}},
+7:{draw(ctx,t,st,dt){
+  // Jarum yang Menunjuk ke Atas: the graveyard at the city's edge; the needle points at the dome
+  backdrop(ctx,t);
+  const TX=640,TW=130,tk=TW/SC2.tower.w,TH=SC2.tower.h*tk,TB=950,TT=TB-TH;
+  sp(ctx,'tower',TX,TB,TW,{shadow:false});domeSouls(ctx,TX,TT+70*tk,48*tk*2,40*tk*2,.85,t);
+  hill(ctx,962,34,3,'#d8c7a2',t);
+  [['grave2',470,86,1],['grave1',300,96,0],['grave3',560,104,0],['grave1',190,120,1],['grave2',700,112,0],['grave3',400,128,1]].forEach(([k,x,w,f])=>sp(ctx,k,x,BASE+4,w,{flip:!!f}));
+  // Suluh walks the garden with the compass; at the end he goes to Pak Nadi, who gives him Kejora's notebook
+  const path=[[0,330],[3,210],[6,520],[9,380],[12,270],[15,470],[15.8,470],[17.6,388]];
+  let sx=470,face=1,walking=false;
+  for(let i=0;i<path.length-1;i++){const [t0,x0]=path[i],[t1,x1]=path[i+1];if(t>=t0&&t<t1){sx=tw(t,t0,t1,x0,x1);if(x1!==x0){face=x1>x0?1:-1;walking=t<t1-.4}else face=1}}
+  if(t>=17.6){sx=388;face=-1}
+  if(t<0.01)sx=330;
+  st.svx=(sx-(st.lx??sx))/Math.max(dt,1e-3);st.lx=sx;
+  const give=tw(t,17.9,18.8,0,1)-tw(t,19.6,20.6,0,1),pass=clamp((t-18.8)/.8,0,1);
+  const nHead=t<15.8?12:t<18?tw(t,15.8,16.8,12,5):t<19.6?5:tw(t,19.6,20.6,5,12);
+  const np=puppet(ctx,'nadi',{x:250,y:BASE+8,h:H0*.98,head:nHead,upper:-30*give,lower:8*give,bob:Math.sin(t*1.1)*1,track:[['wrist',.5,.5],['hand',.84,.6]]});
+  // Suluh takes the notebook and lifts it to look at it
+  const hold=tw(t,19.2,20.2,0,1);
+  const sp2=puppet(ctx,'suluh',{x:sx,y:BASE+16,h:H0,face,bob:walkBob(t,walking),head:t<15.8?-8:t<19.8?tw(t,15.8,16.6,-8,0):tw(t,19.8,20.6,0,10),
+    upper:tw(t,18.4,19,0,-20)-14*hold,lower:-42*hold,track:[['grip',.56,.36]]});
+  // the notebook: upright on Pak Nadi's palm, carried across, then held by its spine in Suluh's hand, in front of him
+  const bk=1.55;
+  if(np.hand&&sp2.grip){const a=toStage(ctx,np.hand),w=toStage(ctx,np.wrist),fa=Math.atan2(a.y-w.y,a.x-w.x),b=toStage(ctx,sp2.grip),k=E.io(pass);
+    const ax=a.x,ay=a.y-15*bk,bx=b.x-face*3*bk,by=b.y-6*bk;
+    noteBook(ctx,lerp(ax,bx,k),lerp(ay,by,k)-Math.sin(k*Math.PI)*10,lerp(fa*.5,-.1*face,k),false,bk)}
+  nightWash(ctx,.4);
+  st.nv=(st.nv||0)+(st.svx||0)*.0009;
+  smallCompass(ctx,st,705,995,140,Math.atan2(TT+60-995,TX-705)+Math.PI/2,dt);
+}},
+8:{draw(ctx,t,st,dt){
+  // Arsip: ledgers on every wall, gears the size of houses, the iron stair to the top
+  ctx.fillStyle='#3a2c22';ctx.fillRect(OP.x,OP.y,OP.w,OP.h);ctx.fillStyle=hatch(ctx,0,4,.3);ctx.fillRect(OP.x,OP.y,OP.w,OP.h);
+  sp(ctx,'gearL',300,560,250,{ax:.5,ay:.5,rot:t*.16});sp(ctx,'gearS',560,470,170,{ax:.5,ay:.5,rot:-t*.24});sp(ctx,'gearL',700,690,200,{ax:.5,ay:.5,rot:t*.2+.3});
+  const dim=a=>{ctx.fillStyle=`rgba(24,15,10,${a})`;ctx.fillRect(OP.x,OP.y,OP.w,OP.h)};
+  dim(.35);
+  // bookcases slide in from both wings, deeper ones smaller and darker
+  const bc=(w,dx,i,stack)=>{const k=w/SC2.bookcase.w,h=SC2.bookcase.h*k,inn=E.out(clamp((t-(2-i)*.3)/2.2,0,1));
+    for(let j=0;j<stack;j++){sp(ctx,'bookcase',OP.x-w/2-10+inn*(w+10+dx),BASE+4-j*(h-6),w,{shadow:i===2});sp(ctx,'bookcase',OP.x+OP.w+w/2+10-inn*(w+10+dx),BASE+4-j*(h-6),w,{flip:true,shadow:i===2})}};
+  bc(110,170,0,2);dim(.35);bc(150,70,1,2);dim(.18);
+  // Suluh climbs the stair, winding round its column: in front, then behind
+  const cx=455,SW2=190,k=SW2/SC2.stair.w,SH2=SC2.stair.h*k;
+  const climb=clamp(t/16,0,1),turns=2.5,ph=climb*turns*Math.PI*2,front=Math.cos(ph)>0;
+  const S={x:cx+Math.sin(ph)*58,y:BASE-30-climb*(SH2-150),h:190,face:Math.cos(ph)>0?(Math.sin(ph+.01)>Math.sin(ph)?1:-1):(Math.sin(ph+.01)>Math.sin(ph)?1:-1),bob:walkBob(t,climb<1)};
+  if(!front){ctx.save();ctx.globalAlpha=.85;puppet(ctx,'suluh',S);ctx.restore()}
+  sp(ctx,'stair',cx,BASE+6,SW2);
+  if(front)puppet(ctx,'suluh',S);
+  bc(200,0,2,2);
+  ctx.save();const v=ctx.createRadialGradient(SW/2,OP.y+OP.h*.6,OP.h*.2,SW/2,OP.y+OP.h*.6,OP.h*.8);v.addColorStop(0,'rgba(20,12,8,0)');v.addColorStop(1,'rgba(20,12,8,.5)');ctx.fillStyle=v;ctx.fillRect(OP.x,OP.y,OP.w,OP.h);ctx.restore();
+}},
+9:{draw(ctx,t,st,dt){
+  // Jantung Menara: the first time the stage floods with colour
+  st.far=st.far||makeComb(17,1);st.mid=st.mid||makeComb(30,2);
+  drawCombLattice(ctx,st.far,17,.15);combLights(ctx,st.far,17,t,.55);
+  st.midL=st.midL||(()=>{const c=document.createElement('canvas');c.width=SW*2;c.height=SH*2;const g=c.getContext('2d');g.scale(2,2);
+    for(const k of st.mid){if(k.y<BASE-330)continue;g.beginPath();hexPath(g,k.x,k.y,27.6);g.fillStyle='rgba(40,28,20,.94)';g.fill();g.strokeStyle='rgba(222,190,132,.8)';g.lineWidth=2.2;g.stroke();g.fillStyle='rgba(190,152,90,.95)';g.fillRect(k.x-8,k.y+15,16,5)}return c})();
+  ctx.drawImage(st.midL,0,0,SW,SH);
+  const front=st.mid.filter(k=>k.y>=BASE-330);
+  st.answer=st.answer||front.reduce((b,k)=>Math.abs(k.x-560)+Math.abs(k.y-(BASE-120))<Math.abs(b.x-560)+Math.abs(b.y-(BASE-120))?k:b,front[0]);
+  combLights(ctx,front,30,t,.95,1,st.answer);
+  ink(ctx,c=>c.rect(OP.x,BASE-8,OP.w,90),{fill:'#4a3a2c',h:[0,4,.45],lw:1.4});for(let x=OP.x;x<OP.x+OP.w;x+=64)line(ctx,[[x,BASE-8],[x+10,BASE+60]],.8,.5);
+  const mine=blinkAt(t-3,0)>.5&&t<5.4,back=t>8.4&&t<10.8&&((t-8.4)%.8)<.38;
+  soul(ctx,st.answer.x,st.answer.y-2,back?78:34,back?1:.45);
+  const s=puppet(ctx,'suluh',{x:330,y:BASE,h:H0,head:-6,upper:t>12?tw(t,12,13.4,-40,-80):-40,lower:t>12?-10:-30,track:[['grip',.68,.42]]});
+  if(s.grip){const L=hangLantern(ctx,st,'sl',toStage(ctx,s.grip),s.s,dt);if(L)paleLight(ctx,L.x,L.y,110,mine?1:.15)}
+  ctx.save();ctx.globalCompositeOperation='soft-light';ctx.fillStyle='rgba(255,170,80,.18)';ctx.fillRect(OP.x,OP.y,OP.w,OP.h);ctx.restore();
+}},
+10:{draw(ctx,t,st,dt){
+  // Harga: Gaharu in the doorway, backlit, his shadow over the boy; the lights behind pulse slower
+  st.far=st.far||makeComb(22,3);drawCombLattice(ctx,st.far,22,.2);combLights(ctx,st.far,22,t,.6,.35);
+  ctx.fillStyle='rgba(20,12,8,.4)';ctx.fillRect(OP.x,OP.y,OP.w,OP.h);
+  floorBoards(ctx);
+  const back=tw(t,.4,1.4,0,1);
+  doorway(ctx,170,130,440,1,'#120c09',back,430,'#5a4836');
+  const gx=t<4?235:tw(t,4,6.4,235,430);
+  const G={x:gx,y:BASE,h:H0,head:4,upper:t>8&&t<9.8?tw(t,8,8.8,0,-50)-tw(t,9.2,9.8,0,-50):0};
+  shadowOf(ctx,gx,BASE,()=>puppet(ctx,'gaharu',{...G,x:0,y:0}),2.6,.2,.6*back);
+  ctx.save();if(typeof ctx.filter==='string')ctx.filter=`brightness(${tw(t,3.6,6.4,.28,.62).toFixed(2)})`;puppet(ctx,'gaharu',G);ctx.restore();
+  const S={x:640,y:BASE,h:H0,face:-1,head:t<6.4?-4:6,upper:t>11&&t<13?tw(t,11,11.8,0,-55):t>=13?tw(t,13,13.6,-55,0):(t<8.6?-25:0),track:[['grip',.75,.5]]};
+  const s=puppet(ctx,'suluh',S);
+  const hand=s.grip?toStage(ctx,s.grip):{x:580,y:760};
+  const kim=IMG.gaharu_prop_key;
+  if(kim&&t<10){const k=clamp((t-8.6)/1,0,1),gp=charPt('gaharu',G,190,290),x=lerp(hand.x,gp.x,k),y=lerp(hand.y,gp.y,k);ctx.drawImage(kim,x-6,y-10,kim.width*.18,kim.height*.18)}
+  if(t>11.4){const k=clamp((t-11.4)/1.2,0,1),gp=charPt('gaharu',G,200,290),x=lerp(hand.x,gp.x,k),y=lerp(hand.y,gp.y,k);
+    ink(ctx,c=>c.rect(x-14,y-18,28,36),{fill:'#5a3a26',h:[90,3,.4],lw:1.2});line(ctx,[[x-10,y-18],[x-10,y+18]],.8,.6)}
+}},
+11:{draw(ctx,t,st,dt){
+  // Wangi: alone at the dock with the measuring pole; then alone before one cell
+  const sw=E.io(clamp((t-8)/1.6,0,1));
+  ctx.save();ctx.translate(-sw*OP.w,0);
+  skyWash(ctx,'#47455a','#8b8478','#a69d8c');
+  softCloudBand(ctx,'cloudB',1000,760,6,t);
+  const dw=640,dk=dw/SC2.dock.w,poleX=660,left=poleX-1007*dk,dockY=900;
+  sp(ctx,'dock',left+dw/2,dockY-245*dk+SC2.dock.h*dk,dw);
+  const g=ctx.createLinearGradient(0,dockY+60,0,OP.y+OP.h);g.addColorStop(0,'rgba(230,224,210,0)');g.addColorStop(1,'rgba(230,224,210,.75)');ctx.fillStyle=g;ctx.fillRect(OP.x,dockY+60,OP.w,OP.h);
+  const G={x:520,y:dockY+8,h:H0,head:tw(t,1.2,2.4,0,11),upper:tw(t,2.4,3.4,0,-30),rock:tw(t,1.2,2.4,0,7)};
+  puppet(ctx,'gaharu',G);
+  nightWash(ctx,.5);
+  const lp=charPt('gaharu',G,...GAHARU_LAMP);paleLight(ctx,lp.x,lp.y,100,.6);
+  ctx.restore();
+  if(sw>0){ctx.save();ctx.translate(OP.w*(1-sw),0);
+    st.far=st.far||makeComb(26,7);drawCombLattice(ctx,st.far,26,.3);
+    st.wangi=st.wangi||st.far.reduce((b,k)=>Math.abs(k.x-560)+Math.abs(k.y-690)<Math.abs(b.x-560)+Math.abs(b.y-690)?k:b,st.far[0]);
+    const dim=tw(t,10,15,1,.03);combLights(ctx,st.far,26,t,.75*dim,.5,st.wangi);
+    soul(ctx,st.wangi.x,st.wangi.y,34,.3+.08*Math.sin(t*.8));
+    ink(ctx,c=>c.rect(OP.x,BASE-8,OP.w,90),{fill:'#4a3a2c',h:[0,4,.45],lw:1.4});
+    puppet(ctx,'gaharu',{x:420,y:BASE,h:H0,head:10,rock:3,upper:tw(t,12,14,0,-62)});
+    ctx.restore()}
+}},
+12:{draw(ctx,t,st,dt){
+  // Membuka Kubah: the tower is open to everyone
+  st.far=st.far||makeComb(26,11);drawCombLattice(ctx,st.far,26,.1);
+  if(!st.open){st.open=new Map();const cand=st.far.filter(k=>k.y<BASE-160&&k.y>VIS_TOP);
+    st.first=cand.reduce((b,k)=>Math.abs(k.x-450)+Math.abs(k.y-640)<Math.abs(b.x-450)+Math.abs(b.y-640)?k:b,cand[0]);
+    st.kept=cand.reduce((b,k)=>Math.abs(k.x-690)+Math.abs(k.y-760)<Math.abs(b.x-690)+Math.abs(b.y-760)?k:b,cand[0]);
+    let r=7;st.far.forEach((k,i)=>{if(k!==st.first&&k!==st.kept&&((i*7919)%100)<58)st.open.set(k,7+((i*104729)%900)/100)});st.open.set(st.first,2.4);st.up=[]}
+  for(const k of st.far){const ot=st.open.get(k),isOpen=ot!=null&&t>ot;
+    if(isOpen&&!k.gone){k.gone=1;st.up.push({x:k.x,y:k.y,vx:(Math.random()-.5)*16,vy:-30-Math.random()*20,b:k.b,first:k===st.first,t0:t})}
+    if(!isOpen)soul(ctx,k.x,k.y,31,k.b*.8*(.75+.25*Math.sin(t*k.w+k.ph)));
+    else{ctx.save();ctx.beginPath();hexPath(ctx,k.x,k.y,22);ctx.fillStyle='rgba(15,10,8,.9)';ctx.fill();ctx.restore()}}
+  soul(ctx,st.kept.x,st.kept.y,40,.9);
+  ink(ctx,c=>c.rect(OP.x,BASE-110,OP.w,124),{fill:'#3b2c21',h:[0,4,.3],lw:1});
+  ink(ctx,c=>c.rect(OP.x,BASE-114,OP.w,10),{fill:PAPER_D,h:[0,3,.4]});
+  [['oldman',160,180,1],['baker',245,170,1],['stout',600,180,-1],['girl',520,130,-1]].forEach(([n,x,h,f])=>extra(ctx,n,{x,y:BASE-110,h,face:f}));
+  extra(ctx,'youngmother',{x:280,y:BASE,h:260});
+  extra(ctx,'mother',{x:st.kept.x-18,y:BASE,h:300,rock:Math.sin(t*1.4)*1.2});
+  puppet(ctx,'suluh',{x:420,y:BASE,h:H0,head:t<2.4?-18:-30,upper:t<2.2?tw(t,1,2,0,-110):tw(t,2.6,3.4,-110,-20)});
+  for(const p of st.up){const age=t-p.t0;
+    if(p.first&&age<2.2){const a=age/2.2*Math.PI*2;p.x=st.first.x+Math.cos(a)*30;p.y=st.first.y-10+Math.sin(a)*24}
+    else{p.vy-=10*dt;p.x+=(p.vx+Math.sin(t+p.y*.02)*12)*dt;p.y+=p.vy*dt}
+    soul(ctx,p.x,p.y,32,p.b*.8+.2)}
+  st.up=st.up.filter(p=>p.y>OP.y-60);
+}},
+13:{draw(ctx,t,st,dt){
+  // Menembus Awan: the clouds rise and swallow the city from the top down; only the boy is left
+  skyWash(ctx,'#5f5e70','#a8a296','#cfc8ba',.12);
+  const sink=tw(t,0,14,0,260,E.in);
+  ctx.save();ctx.translate(0,sink);
+  const TW=120,tk=TW/SC2.tower.w,TH=SC2.tower.h*tk;
+  sp(ctx,'tower',560,930,TW,{shadow:false});domeSouls(ctx,560,930-TH+70*tk,48*tk*2,40*tk*2,.5*tw(t,9,11,1,.15),t,3);
+  piece(ctx,'city',450,950,820,{shadow:false});
+  ctx.restore();
+  if(t>9){const k=t-9;soul(ctx,560+Math.sin(k)*14,930-TH+60*tk+sink-k*55,40,clamp(k,0,1))}
+  for(let i=0;i<7;i++){const y=1100-tw(t,i*.8,8+i*.8,0,520-i*24,E.out)+i*40;softCloudBand(ctx,i%2?'cloudA':'cloudB',y,760+i*40,i%2?7:-6,t+i*13)}
+  const dw=600,dk=dw/SC2.dock.w,poleX=820,left=poleX-1007*dk,dockY=870;
+  sp(ctx,'dock',left+dw/2,dockY-245*dk+SC2.dock.h*dk,dw);
+  puppet(ctx,'suluh',{x:left+70,y:dockY,h:300,face:1,head:t<9?-4:-12,upper:t<9?-10:tw(t,9,11,-10,-112),lower:t<9?0:-14});
+  smallCompass(ctx,st,225,990,150,0,dt,t<11?t*9+Math.sin(t*3)*2:null);
+}},
+14:{draw(ctx,t,st,dt){
+  // Fajar: the city sits on the ground; the morning star comes down where the evening star was
+  const d=tw(t,0,12,0,1,E.io);
+  skyWash(ctx,`rgb(${lerp(52,176,d)|0},${lerp(52,174,d)|0},${lerp(70,188,d)|0})`,`rgb(${lerp(80,236,d)|0},${lerp(76,214,d)|0},${lerp(88,182,d)|0})`,`rgb(${lerp(70,240,d)|0},${lerp(66,224,d)|0},${lerp(74,196,d)|0})`,.14);
+  const sy=tw(t,4,8,OP.y-60,OP.y+260,E.out),sway=Math.sin(t*1.25)*10*Math.exp(-Math.max(0,t-7)*.25);
+  starOnString(ctx,500,sy,sway,tw(t,6.4,8,0,1));
+  sp(ctx,'tower',690,880,76,{shadow:false});
+  piece(ctx,'city',560,895,700,{shadow:false});
+  sp(ctx,'hillA',450,905,820,{shadow:false});
+  sp(ctx,'hillB',360,975,860,{shadow:false});
+  const kneel=tw(t,2,3.4,0,1);
+  puppet(ctx,'suluh',{x:330,y:1010+kneel*70,h:H0,rock:kneel*12,head:t<8?kneel*26:tw(t,8,9,26,-14),upper:t>3.4&&t<10?-60+Math.sin(t*5)*14:0,lower:t>3.4&&t<10?-30:0});
+  sp(ctx,'hillA',420,1046,900,{shadow:false});
+  ink(ctx,c=>c.ellipse(450,1008,28,7,0,0,7),{fill:'#5a4430',h:[0,3,.4],lw:1.2});
+  if(t>11){const gr=E.out(clamp((t-11)/2.2,0,1));if(gr>.02)sp(ctx,'sprout',452,1012,70*gr,{shadow:false})}
+  nightWash(ctx,tw(t,0,12,.7,0));
+  smallCompass(ctx,st,690,990,150,t<7?1.2:Math.atan2(sy+30-990,500+sway-690)+Math.PI/2,dt);
+}}
+});
+
+function blinkAt(t,who){
+  if(t<0)return 0;const cyc=6.4,k=t%cyc,start=who?3.2:0;const u=k-start;
+  if(u<0||u>2.4)return .08;const ph=u%.8;return ph<.38?1:.08;
+}
+function toStage(ctx,pt){const s=ctx.__base;return {x:pt.x/s,y:pt.y/s}}
+
+/* ---- curtains: two cloth panels that gather to the sides, with a little swing ---- */
+function curtains(ctx,open,swing){
+  const im=IMG.sc_curtain;if(!im)return;
+  const H=OP.h+40,Wfull=H*im.width/im.height;
+  const half=OP.w/2+52;
+  for(const side of [-1,1]){
+    const w=lerp(half,Wfull*.2,open)*(1+swing*.03);
+    ctx.save();
+    const outer=side<0?OP.x-34:OP.x+OP.w+34;
+    ctx.translate(outer,OP.y-20);
+    if(side>0)ctx.scale(-1,1);
+    ctx.shadowColor='rgba(20,10,6,.45)';ctx.shadowBlur=18;ctx.shadowOffsetX=0;ctx.shadowOffsetY=6;
+    // skew a touch as the cloth swings
+    ctx.transform(1,0,swing*.04*-side,1,0,0);
+    ctx.drawImage(im,0,-H*.08,w,H*1.08);
+    ctx.restore();
+  }
+}
+function placard(ctx,num,title,t){
+  const y=OP.y+OP.h*.42+Math.sin(t*1.1)*3,w=330,h=170,x=SW/2-w/2,rot=Math.sin(t*.9)*.012;
+  ctx.save();ctx.strokeStyle='rgba(43,29,20,.75)';ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(SW/2-110,OP.y+40);ctx.lineTo(SW/2-110,y);ctx.moveTo(SW/2+110,OP.y+40);ctx.lineTo(SW/2+110,y);ctx.stroke();
+  ctx.translate(SW/2,y);ctx.rotate(rot);ctx.translate(-SW/2,-y);
+  ctx.shadowColor='rgba(20,10,6,.4)';ctx.shadowBlur=12;ctx.shadowOffsetY=6;
+  ctx.fillStyle='#ece0c4';ctx.fillRect(x,y,w,h);ctx.shadowColor='transparent';
+  ctx.strokeStyle='rgba(43,29,20,.85)';ctx.lineWidth=1.4;ctx.strokeRect(x+10,y+10,w-20,h-20);
+  ctx.fillStyle='#2b1d14';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='22px "IM Fell English SC",Georgia,serif';ctx.fillText('Babak '+num,SW/2,y+44);
+  ctx.font='italic 30px "IM Fell DW Pica",Georgia,serif';ctx.fillText(title,SW/2,y+86);
+  ctx.font='italic 17px "IM Fell English",Georgia,serif';ctx.fillStyle='rgba(43,29,20,.7)';ctx.fillText('segera dipentaskan',SW/2,y+128);
+  ctx.restore();
+}
+
+class Stage{
+  constructor(page){
+    this.page=page;this.cv=page.querySelector('canvas');this.ctx=this.cv.getContext('2d');
+    this.n=+page.dataset.scene;this.title=page.dataset.title;this.num=page.dataset.num;
+    this.t0=null;this.st={};this.frame=null;this.cur={p:0,v:0};this.last=0;
+  }
+  size(){
+    const dpr=DPR(),w=Math.round(this.page.offsetWidth*dpr),h=Math.round(this.page.offsetHeight*dpr);
+    if(w!==this.cv.width||h!==this.cv.height){this.cv.width=w;this.cv.height=h;this.frame=null}
+  }
+  buildFrame(){
+    // the printed proscenium, its valance, and the act number in the cartouche
+    const c=document.createElement('canvas');c.width=this.cv.width;c.height=this.cv.height;const g=c.getContext('2d');
+    g.scale(c.width/SW,c.height/SH);
+    if(IMG.sc_valance)g.drawImage(IMG.sc_valance,0,0,SW,SH);
+    if(IMG.sc_frame)g.drawImage(IMG.sc_frame,0,0,SW,SH);
+    g.fillStyle='#2b1d14';g.textAlign='center';g.textBaseline='middle';
+    g.font='30px "IM Fell English SC",Georgia,serif';g.fillText(this.num,SW/2,96);
+    this.frame=c;
+  }
+  draw(now,running){
+    this.size();if(!this.cv.width)return;
+    if(!this.frame)this.buildFrame();
+    const ctx=this.ctx,s=this.cv.width/SW;ctx.__base=s;
+    const dt=Math.min(.05,this.last?(now-this.last)/1000:.016);this.last=now;
+    if(this.t0==null&&running)this.t0=now;
+    const t=this.t0==null?0:(now-this.t0)/1000;
+    ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,this.cv.width,this.cv.height);
+    ctx.setTransform(s,0,0,this.cv.height/SH,0,0);
+    const sc=SCENES[this.n];
+    // curtain physics: a damped spring toward open
+    const target=sc?(t>.7?1:0):0;
+    if(reduce){this.cur.p=target;this.cur.v=0}else{this.cur.v+=((target-this.cur.p)*14-this.cur.v*5.2)*dt;this.cur.p+=this.cur.v*dt}
+    ctx.save();ctx.beginPath();ctx.rect(OP.x,OP.y,OP.w,OP.h);ctx.clip();
+    if(sc){ctx.save();try{sc.draw(ctx,reduce?40:Math.max(0,t-1.2),this.st,dt)}catch(e){if(!this.err){this.err=1;console.error(e)}}ctx.restore()}
+    else{ctx.fillStyle='#2a1d15';ctx.fillRect(OP.x,OP.y,OP.w,OP.h)}
+    curtains(ctx,clamp(this.cur.p,0,1.08),this.cur.v);
+    if(!sc)placard(ctx,this.num,this.title,now/1000);
+    ctx.restore();
+    // printed grain, then the frame on top
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalCompositeOperation='multiply';ctx.globalAlpha=.45;ctx.fillStyle=ctx.createPattern(grain,'repeat');ctx.fillRect(0,0,this.cv.width,this.cv.height);
+    ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
+    ctx.drawImage(this.frame,0,0);
+    // footlights and pillar lanterns: pale paper light, never amber
+    ctx.setTransform(s,0,0,this.cv.height/SH,0,0);
+    const on=clamp(this.cur.p,0,1),fl=lamp.F;
+    for(const x of FOOT)glow(ctx,x,1046,70,.34*on*fl,true);
+    for(const [x,y] of SIDE)glow(ctx,x,y,60,(.25+.25*on)*fl,true);
+  }
+  reset(){this.t0=null;this.st={};this.cur={p:0,v:0}}
+}
+
+/* =====================================================================
+   BOOK + CAMERA
+   ===================================================================== */
+const world=$('#world'),wrap=$('#bookwrap');let el=$('#book');const opener=$('#opener'),bookshadow=$('#bookshadow');
+const ui=$('#ui'),hint=$('#hint'),prevB=$('#prev'),nextB=$('#next'),sndB=$('#snd'),deskhint=$('#deskhint');
+let book=null,pageW=0,pageH=0,portrait=false,state='desk',stages=[],lastIdx=0;
+const allPages=[...document.querySelectorAll('#book .page')];
+const N=allPages.length;
+const curIndex=()=>book?book.getCurrentPageIndex():0;
+
+function layout(){
+  const W=innerWidth,H=innerHeight;
+  portrait=W<H*.95;document.body.classList.toggle('portrait',portrait);
+  if(portrait){pageH=Math.min(H*.88,(W*.94)*4/3);pageW=pageH*.75}
+  else{pageH=Math.min(H*.94,(W*.96)/2*4/3);pageW=pageH*.75}
+  pageW=Math.floor(pageW);pageH=Math.floor(pageH);
+  const bw=portrait?pageW:pageW*2;
+  el.style.width=bw+'px';el.style.height=pageH+'px';
+  wrap.style.width=bw+'px';wrap.style.height=pageH+'px';
+  const ds=deskScale();deskGeo.dw=Math.max(W,H/.5628)/ds*1.04;deskGeo.dh=deskGeo.dw*.5628;
+  document.documentElement.style.setProperty('--ph',pageH+'px');
+}
+function shiftFor(i){if(portrait)return 0;if(i===0)return -pageW/2;if(i>=N-1)return pageW/2;return 0}
+function placeWrap(i,instant){
+  const x=shiftFor(i);
+  if(instant||litX===null)lightVars();
+  if(instant)bookshadow.style.transition='none';
+  bookshadow.style.left=(!portrait&&i===0)?'50%':'1%';bookshadow.style.right=(!portrait&&i>=N-1)?'50%':'1%';
+  if(instant){bookshadow.offsetWidth;bookshadow.style.transition='';wrap.style.transition='none'}
+  wrap.style.transform=`translate(calc(-50% + ${x}px),-50%)`;
+  if(instant){wrap.offsetWidth;wrap.style.transition=''}
+  opener.style.display=state==='desk'?'block':'none';
+  opener.style.left=(portrait?0:pageW)+'px';opener.style.top='0';opener.style.width=pageW+'px';opener.style.height=pageH+'px';
+}
+/* the camera; at rest in the reading position the transform is removed entirely */
+let camTimer=0;
+function setCam(s,dur=0,ease='cubic-bezier(.65,0,.35,1)',x=0,y=0){
+  clearTimeout(camTimer);
+  const tf=`translate(${x}px,${y}px) scale(${s})`;
+  if(!dur){world.style.transition='none';world.style.transform=(s===1&&!x&&!y)?'none':tf;return}
+  if(world.style.transform==='none'||!world.style.transform){world.style.transition='none';world.style.transform='translate(0px,0px) scale(1)';world.offsetWidth}
+  world.style.transition=`transform ${dur}ms ${ease}`;world.style.transform=tf;
+  if(s===1&&!x&&!y)camTimer=setTimeout(()=>{world.style.transition='none';world.style.transform='none'},dur+30);
+}
+function deskScale(){return Math.min(.62,(innerHeight*.56)/(pageH||innerHeight*.9))}
+
+let castCv=null,castCtx=null,castOn=false,castT0=0;
+/* A board (cover) turning on the spine casts a shadow away from the lamp.
+   The flame is treated as a point high above the desk: a point at height h throws its shadow
+   h*k along the horizontal direction pointing away from the flame (k = 1/tan(elevation)). */
+function castShadow(){
+  if(!castCtx||!book||portrait)return;
+  const r=book.getRender(),fp=r&&r.flippingPage;
+  const st=book.getState(),moving=st==='flipping'||st==='user_fold';
+  const hard=moving&&fp&&fp.getDrawingDensity&&fp.getDrawingDensity()==='hard'&&r.shadow;
+  const W=pageW,H=pageH,PAD=W;
+  if(castCv.width!==Math.round(4*W)){castCv.width=Math.round(4*W);castCv.height=Math.round(2*H);
+    castCv.style.cssText=`left:${-PAD}px;top:${-H/2}px;width:${4*W}px;height:${2*H}px`}
+  const g=castCtx;
+  if(!hard){if(castOn){g.clearRect(0,0,castCv.width,castCv.height);castOn=false}castT0=0;return}
+  if(!castT0)castT0=performance.now();const fin=clamp((performance.now()-castT0)/140,0,1);
+  castOn=true;g.clearRect(0,0,castCv.width,castCv.height);
+  const a=fp.getHardAngle(),th=(r.getDirection()===0?180-a:-a)*Math.PI/180;
+  // lamp in book-local pixels, from the live position of the book on the desk
+  const m=new DOMMatrix(getComputedStyle(wrap).transform),Lw=lampWorld();
+  const lx=Lw[0]-m.e,ly=Lw[1]-m.f,sx=W,sy=H/2;
+  let ux=sx-lx,uy=sy-ly;const d=Math.hypot(ux,uy)||1;ux/=d;uy/=d;
+  const k=.95,h=W*Math.sin(th),cx=W*Math.cos(th);
+  const tipX=sx+cx+h*k*ux,dy=h*k*uy;
+  g.save();g.translate(PAD,H/2);
+  g.filter=`blur(${(6+h*.035).toFixed(1)}px)`;
+  const F=lamp.F*fin;
+  const gr=g.createLinearGradient(sx,0,tipX,0);
+  gr.addColorStop(0,`rgba(12,6,3,${(.55*F).toFixed(3)})`);gr.addColorStop(1,`rgba(12,6,3,${(.18*F).toFixed(3)})`);
+  g.fillStyle=gr;g.beginPath();g.moveTo(sx,0);g.lineTo(tipX,dy);g.lineTo(tipX,H+dy);g.lineTo(sx,H);g.closePath();g.fill();
+  g.restore();
+}
+function createBook(startAt=0){
+  // page-flip's render loop (requestAnimationFrame, forever) survives destroy(); left running, the old book keeps
+  // drawing the same page elements as the new one, and the two fight every frame (the covers flicker). Stop it first.
+  if(book){try{const r=book.getRender();r.render=()=>{};r.drawFrame=()=>{};r.update=()=>{};book.destroy()}catch(e){}
+    const nb=document.createElement('div');nb.id='book';wrap.insertBefore(nb,opener);
+    for(const p of allPages){p.removeAttribute('style');p.className=p.className.split(/\s+/).filter(c=>c&&!c.startsWith('stf__')&&!c.startsWith('--')).join(' ');nb.appendChild(p)}
+    for(const p of document.querySelectorAll('.page.tx'))p.style.backgroundImage=`url(${ASSET.paper})`;
+    el=nb;el.style.width=(portrait?pageW:pageW*2)+'px';el.style.height=pageH+'px';
+  }
+  book=new St.PageFlip(el,{width:pageW,height:pageH,size:'fixed',showCover:true,usePortrait:true,autoSize:false,
+    maxShadowOpacity:.55,flippingTime:reduce?320:1050,mobileScrollSupport:false,drawShadow:true,startZIndex:0,
+    swipeDistance:24,showPageCorners:false,disableFlipByClick:false,useMouseEvents:true,startPage:startAt});
+  book.loadFromHTML(allPages);
+  lastIdx=startAt;
+  book.on('changeState',e=>{
+    if(e.data==='flipping'||e.data==='user_fold'){const i=curIndex();
+      // while a board turns, the shadow stays under the half of the book that is actually lying there
+      if(!portrait&&i<=1)bookshadow.style.left='50%';if(!portrait&&i>=N-3)bookshadow.style.right='50%'}
+    if(e.data==='flipping'||e.data==='user_fold'||e.data==='fold_corner'){
+      if(e.data!=='fold_corner'&&!book.__snd){book.__snd=1;const i=curIndex();if(i===0||i>=N-2)play('open',.5,.95+Math.random()*.08);else flipSound()}}
+    if(e.data==='read')book.__snd=0;
+  });
+  book.on('flip',e=>onFlip(e.data));
+  stages=[...el.querySelectorAll('.page.th')].map(p=>p.__stage||(p.__stage=new Stage(p)));
+  // a canvas inside the book, between lying pages and a turning board, for the board's cast shadow
+  const blk=el.querySelector('.stf__block');
+  if(blk){castCv=document.createElement('canvas');castCv.id='castcv';blk.appendChild(castCv);castCtx=castCv.getContext('2d');castOn=false}
+}
+function onFlip(i){
+  const forward=i>lastIdx;lastIdx=i;
+  placeWrap(i);mood(i);update();
+  if(i>=N-1&&forward&&state==='reading')setTimeout(()=>{if(curIndex()>=N-1&&state==='reading')ending()},1100);
+  if(i===0&&state==='reading')closeToDesk();
+}
+function update(){
+  if(!book)return;const i=curIndex();
+  prevB.disabled=i<=0;nextB.disabled=i>=N-1;
+  hint.textContent=i<=2?T('hint'):'';
+}
+const MOOD={6:.6,7:.75,10:.66,11:.55,12:.8,13:.68,14:1.08};
+function mood(i){const n=i>=3?Math.floor((i-3)/2)+1:0;lamp.moodT=(state==='reading'&&MOOD[n])||1}
+function openBook(){
+  if(state!=='desk')return;state='opening';audioInit();MUS.want=true;MUS.leave=false;
+  deskhint.style.opacity=0;opener.style.display='none';
+  play('latch',.45);setTimeout(()=>book.flipNext('top'),reduce?0:260);
+  setCam(1,reduce?0:1500,'cubic-bezier(.45,0,.2,1)');
+  setTimeout(()=>{state='reading';ui.classList.add('on');update();fitText()},reduce?50:1500);
+}
+function closeToDesk(){
+  state='desk';ui.classList.remove('on');lamp.moodT=1;
+  setCam(deskScale(),1300);deskhint.style.opacity=1;placeWrap(0);
+}
+function fitText(){
+  // measure each page in an off-screen twin of the right size, then apply the size that fits
+  const m=document.createElement('div');m.className='page tx';
+  m.style.cssText=`position:fixed;left:-9999px;top:0;width:${pageW}px;height:${pageH}px;visibility:hidden;display:block`;
+  document.body.appendChild(m);
+  for(const p of document.querySelectorAll('#book .page.tx')){
+    m.innerHTML=p.innerHTML;const b=m.querySelector('.body');if(!b)continue;
+    let fs=.0232;b.style.setProperty('--fs',fs);
+    for(let k=0;k<30&&b.scrollHeight>b.clientHeight+1;k++){fs*=.98;b.style.setProperty('--fs',fs.toFixed(5))}
+    p.querySelector('.body').style.setProperty('--fs',fs.toFixed(5));
+  }
+  m.remove();
+}
+/* ---- input ---- */
+let acc=0,lastW=0;
+addEventListener('wheel',e=>{e.preventDefault();if(state!=='reading'||!book||book.getState()!=='read')return;
+  const now=performance.now();if(now-lastW>260)acc=0;lastW=now;acc+=Math.abs(e.deltaY)>Math.abs(e.deltaX)?e.deltaY:e.deltaX;
+  if(acc>50){acc=0;book.flipNext('bottom')}else if(acc<-50){acc=0;book.flipPrev('bottom')}},{passive:false});
+addEventListener('keydown',e=>{
+  if(state==='desk'&&(e.key==='Enter'||e.key===' ')&&(document.activeElement===document.body||document.activeElement===opener)){e.preventDefault();openBook();return}
+  if(state!=='reading'||!book)return;
+  if(['ArrowRight','PageDown'].includes(e.key)){e.preventDefault();book.flipNext()}
+  if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();book.flipPrev()}
+});
+opener.addEventListener('click',openBook);
+prevB.addEventListener('click',()=>book&&book.flipPrev());
+nextB.addEventListener('click',()=>book&&book.flipNext());
+sndB.addEventListener('click',()=>{SND.on=!SND.on;MUS.want=true;sndB.setAttribute('aria-pressed',SND.on);sndB.setAttribute('aria-label',T(SND.on?'mute':'unmute'));sndB.querySelector('.w').style.opacity=SND.on?1:.15;audioInit()});
+
+/* ---- one loop for the whole room ---- */
+let lastT=0;
+function loop(now){
+  const dt=Math.min(.05,lastT?(now-lastT)/1000:.016);lastT=now;
+  lampStep(now/1000,dt);
+  if(pageW&&state!=='ending'){const wx=new DOMMatrix(getComputedStyle(wrap).transform).e;if(litX===null||Math.abs(wx-litX)>.5)lightVars(wx)}
+  castShadow();
+  musicTick();
+  if(!(state==='ending'&&endEl.classList.contains('on')))drawRoom(now/1000,dt);
+  for(const s of stages){
+    const vis=s.page.style.display!=='none'&&state!=='desk'&&state!=='ending';
+    if(vis)s.draw(now,book&&book.getState()==='read');else if(s.t0!=null)s.reset();
+  }
+  if(state==='ending')endFrame(now);
+  requestAnimationFrame(loop);
+}
+
+/* =====================================================================
+   ENDING: the book closes, we fall through its cover, down through the
+   clouds, and land where the city landed.
+   One cloud painting is flown through; the near clouds are soft puffs
+   that rush outward past the camera, as they do when you fall through them.
+   ===================================================================== */
+const endEl=$('#end'),ecv=$('#endcv'),ectx=ecv.getContext('2d');
+const PTR={x:0,y:0,seen:false},HOVER=matchMedia('(hover:hover) and (pointer:fine)').matches;
+addEventListener('pointermove',e=>{if(e.pointerType==='mouse'){PTR.x=e.clientX;PTR.y=e.clientY;PTR.seen=true}},{passive:true});
+wrap.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button===0)document.body.classList.add('grab')});
+for(const ev of ['pointerup','pointercancel','blur'])addEventListener(ev,()=>document.body.classList.remove('grab'));
+let END=null;
+function ending(){
+  if(state==='ending')return;
+  state='ending';ui.classList.remove('on');
+  MUS.leave=true;MUS.want=false;document.body.classList.add('diving');
+  play('close',.6);
+  const D=reduce?.3:1;
+  // the closed book slides to the middle first; then we dive into the centre of its back cover
+  placeWrap(N-1);
+  setTimeout(()=>{
+    const r=allPages[N-1].getBoundingClientRect(),S=6;
+    const px=r.left+r.width/2-innerWidth/2,py=r.top+r.height/2-innerHeight/2;
+    setCam(S,2000*D,'cubic-bezier(.55,0,.9,.4)',-px*S,-py*S);
+    END={t0:performance.now()+1500*D,D,wisps:[],motes:[],up:[],last:0,smoke:[],pet:null};
+    for(let i=0;i<18;i++)END.wisps.push(newWisp(Math.random()));
+    setTimeout(()=>{endEl.classList.add('on');endEl.setAttribute('aria-hidden','false');wind(10*D)},1500*D);
+  },reduce?50:1000);
+}
+function newWisp(z){return {x:(Math.random()-.5)*2.4,y:(Math.random()-.5)*1.8,z:z??1,rot:(Math.random()-.5)*.8,s:.7+Math.random()*.8,flip:Math.random()<.5}}
+/* object-fit:cover with a zoom toward a focus point; returns the image's rectangle on screen */
+function coverDraw(g,im,W,H,scale,fx,fy,alpha=1){
+  const iw=im.videoWidth||im.width,ih=im.videoHeight||im.height;
+  const s0=Math.max(W/iw,H/ih)*scale,w=iw*s0,h=ih*s0;
+  const ox=clamp(W/2-fx*w,W-w,0),oy=clamp(H/2-fy*h,H-h,0);
+  if(alpha>0){g.globalAlpha=alpha;g.drawImage(im,ox,oy,w,h);g.globalAlpha=1}
+  return {ox,oy,w,h};
+}
+/* =====================================================================
+   THE LANDED CITY, LIVING. Four paintings of the same view (pagi, siang, sore, malam); scrolling turns
+   the hours and the shader dissolves from one painting to the next. Only two things move, and only inside
+   masks cut from the noon painting: the near meadow, in a breeze running right and away into the valley,
+   and the river, rippling downstream. Clouds, mist and smoke stay as painted.
+   ===================================================================== */
+const PW=1672,PH=941,HK=['hr_pagi','hr_siang','hr_sore','hr_malam'];
+let SG=null;
+function sceneInit(){
+  const cv=$('#endgl');const gl=cv.getContext('webgl',{premultipliedAlpha:false,antialias:false,alpha:false});if(!gl)return null;
+  const vs=`attribute vec2 p;varying vec2 v;uniform vec4 R;uniform vec2 S;void main(){vec2 px=R.xy+(p*.5+.5)*R.zw;vec2 c=px/S*2.-1.;gl_Position=vec4(c.x,-c.y,0,1);v=vec2(p.x*.5+.5,p.y*.5+.5);}`;
+  const fs=`precision highp float;varying vec2 v;uniform sampler2D A,B,M;uniform float t,k;
+  const vec2 SZ=vec2(${PW}.,${PH}.);const float PI2=6.2831853;
+  float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+  float n(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),u.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),u.x),u.y);}
+  void main(){
+    vec2 uv=v,px=uv*SZ;vec4 m=texture2D(M,uv);
+    // ---- meadow. Gust fronts ~300 px apart run along the wind (right, and up the image = away from us) at
+    // ~140 px/s; under a front the grass leans with the wind and its blades turn pale; between fronts it
+    // springs back. Nearer grass is taller on screen, so it moves more (the mask carries that depth).
+    vec2 dir=normalize(vec2(1.,-.42));float s=dot(px,dir);
+    float wob=2.2*n(vec2(s/520.-t*.12,px.y/240.));
+    float front=.5+.5*sin(s*PI2/300.-t*2.9+wob);
+    float gust=smoothstep(.35,1.,front)*(.65+.35*n(vec2(s/180.-t*.6,px.y/90.+3.)));
+    float lean=m.r*(1.5+6.*gust);                                    // px, at the nearest grass
+    // tufts sway on their own all the time (slow, whole clumps), and blades flicker faster under a gust
+    float sway=m.r*1.1*sin(t*2.1+px.x*.045+px.y*.09+5.*n(px/70.));
+    float flutter=sway+m.r*(.3+.9*gust)*sin(t*5.3+px.x*.21+px.y*.47+3.*n(px/24.));
+    vec2 d=vec2(-(lean+flutter),-.35*m.r*gust)/SZ;                   // sample upwind, so the grass shifts downwind
+    // ---- river: ripples lying across the current, carried downstream; small, inside the banks
+    vec2 f=normalize(vec2(.96,.28)),q=vec2(-f.y,f.x);float al=dot(px,f),ac=dot(px,q);
+    float r1=n(vec2(al*.15-t*1.4,ac*.6)),r2=n(vec2(al*.31-t*2.2,ac*1.2)+7.);
+    d+=m.g*vec2(.4*(r1-.5),1.2*(r2-.5))/SZ;
+    vec3 c=mix(texture2D(A,uv+d).rgb,texture2D(B,uv+d).rgb,k);
+    c*=1.+m.r*(gust-.3)*.13;                                         // pale bands where blades turn
+    c*=1.+m.g*pow(max(0.,r1*r2*1.9-.6),3.)*1.4;                     // glints, in the water's own colour
+    gl_FragColor=vec4(clamp(c,0.,1.),1.);
+  }`;
+  const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s));return null}return s};
+  const pr=gl.createProgram(),a=sh(gl.VERTEX_SHADER,vs),fr=sh(gl.FRAGMENT_SHADER,fs);if(!a||!fr)return null;
+  gl.attachShader(pr,a);gl.attachShader(pr,fr);gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))return null;
+  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  const mk=im=>{const tx=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tx);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,im);return tx};
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);const M=mk(IMG.end_mask);
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.BROWSER_DEFAULT_WEBGL);const TX=HK.map(k=>mk(IMG[k]));
+  gl.useProgram(pr);const U=k=>gl.getUniformLocation(pr,k);
+  gl.uniform1i(U('A'),0);gl.uniform1i(U('B'),1);gl.uniform1i(U('M'),2);
+  return {gl,pr,cv,buf,TX,M,U};
+}
+/* which two paintings, and how far between them; each hour holds for a while before the next comes */
+function hourAt(p){const i=Math.floor(((p%4)+4)%4),f=((p%1)+1)%1,k=f<.3?0:f>.7?1:E.io((f-.3)/.4),j=(i+1)%4;
+  return {i,j,k,n:i===3?1-k:j===3?k:0}}
+function sceneDraw(G,t,W,H,hr){
+  if(SG===null)SG=(IMG.end_mask&&IMG.end_mask.width&&HK.every(k=>IMG[k]&&IMG[k].width))?(sceneInit()||false):false;if(!SG)return false;
+  const {gl,cv}=SG,dpr=DPR();
+  if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}
+  gl.viewport(0,0,cv.width,cv.height);gl.useProgram(SG.pr);
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,SG.TX[hr.i]);
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,SG.TX[hr.j]);
+  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,SG.M);
+  const loc=gl.getAttribLocation(SG.pr,'p');gl.bindBuffer(gl.ARRAY_BUFFER,SG.buf);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  const U=SG.U;gl.uniform4f(U('R'),G.ox,G.oy,G.w,G.h);gl.uniform2f(U('S'),W,H);gl.uniform1f(U('t'),reduce?0:t);gl.uniform1f(U('k'),hr.k);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);return true;
+}
+/* the last lights leaving the dome: tiny pale points that rise, drift, twinkle and thin out (painting pixels) */
+function domeLights(g,G,dt,now,night){
+  const k=G.w/PW,map=(x,y)=>[G.ox+x*k,G.oy+y*k];
+  if(!END.dl){END.dl=[[1179,72,.5],[1178,57,1],[1184,46,.6],[1203,27,1]].map(([x,y,b],i)=>({x,y,b,age:3+i*1.5,vy:-(5+Math.random()*3),ph:Math.random()*6,sw:1+Math.random()*1.5}));END.dlT=0}
+  END.dlT+=dt;if(END.dlT>3.2+Math.random()*2&&END.dl.length<6){END.dlT=0;END.dl.push({x:1178,y:82,b:.5+Math.random()*.5,age:0,vy:-(5+Math.random()*3),ph:Math.random()*6,sw:1+Math.random()*1.5})}
+  for(const p of END.dl){p.age+=dt;if(!reduce){p.y+=p.vy*dt;p.x+=Math.sin(p.age*.7+p.ph)*p.sw*dt+.6*dt}}
+  END.dl=END.dl.filter(p=>p.y>-6);
+  g.save();g.globalCompositeOperation='lighter';
+  for(const p of END.dl){const a=Math.min(1,p.age/1.2)*clamp((p.y+6)/30,0,1)*p.b*(.72+.28*Math.sin(now/380+p.ph*3))*(.85+.3*night),[x,y]=map(p.x,p.y),r=(1.1+night*.5)*Math.max(k,.6)*1.6;
+    const gr=g.createRadialGradient(x,y,0,x,y,r*3.2);gr.addColorStop(0,`rgba(255,252,240,${a})`);gr.addColorStop(.18,`rgba(255,240,204,${a*.75})`);gr.addColorStop(.45,`rgba(255,230,186,${a*.22})`);gr.addColorStop(1,'rgba(255,226,180,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(x,y,r*3.2,0,7);g.fill()}
+  g.restore();
+}
+/* scrolling turns the hours: dawn, noon, late afternoon, night, and round again */
+const HOUR_ID=['pagi','siang','sore','malam'],HOUR_EN=['dawn','noon','late afternoon','night'];
+let HOUR={p:0,target:0,last:0,shown:-1,hintDone:false};
+function hourNudge(d){if(!END||!END.words)return;HOUR.target+=d;HOUR.last=performance.now();
+  if(!HOUR.hintDone){HOUR.hintDone=true;$('#timehint').classList.remove('on')}}
+endEl.addEventListener('wheel',e=>{const px=e.deltaMode===1?e.deltaY*32:e.deltaMode===2?e.deltaY*innerHeight:e.deltaY;hourNudge(px/900);e.preventDefault()},{passive:false});
+let tY=null;endEl.addEventListener('touchstart',e=>{tY=e.touches[0].clientY},{passive:true});
+endEl.addEventListener('touchmove',e=>{if(tY==null)return;const y=e.touches[0].clientY;hourNudge((tY-y)/520);tY=y},{passive:true});
+addEventListener('keydown',e=>{if(!END||!END.words)return;if(e.key==='ArrowDown'||e.key==='PageDown')hourNudge(.5);if(e.key==='ArrowUp'||e.key==='PageUp')hourNudge(-.5)});
+function hourStep(dt){HOUR.p+=(HOUR.target-HOUR.p)*Math.min(1,dt*2.6);
+  const i=((Math.round(HOUR.p)%4)+4)%4,w=$('#timeword'),busy=performance.now()-HOUR.last<1400;
+  if(i!==HOUR.shown){HOUR.shown=i;w.textContent=(LANG==='en'?HOUR_EN:HOUR_ID)[i]}
+  w.classList.toggle('on',busy&&HOUR.last>0);return hourAt(HOUR.p)}
+
+function endFrame(now){
+  if(!END)return;
+  const W=innerWidth,H=innerHeight,dpr=DPR();
+  if(ecv.width!==Math.round(W*dpr)||ecv.height!==Math.round(H*dpr)){ecv.width=Math.round(W*dpr);ecv.height=Math.round(H*dpr)}
+  const g=ectx;g.setTransform(dpr,0,0,dpr,0,0);
+  const D=END.D,t=(now-END.t0)/1000/D,dt=Math.min(.05,END.last?(now-END.last)/1000:.016);END.last=now;
+  if(t<0){g.fillStyle='#e8e6ee';g.fillRect(0,0,W,H);endEl.style.opacity=clamp(1+t/.5,0,1);return}
+  endEl.style.opacity=1;
+  g.clearRect(0,0,W,H);
+  const land=clamp((t-5.8)/1.4,0,1);
+  let glOK=false;
+  if(land>0){
+    // the hour's painting (dissolving into the next while the reader scrolls); without WebGL, the same with 2D
+    const hour=hourStep(dt),A=IMG[HK[hour.i]],Bi=IMG[HK[hour.j]];
+    const G=coverDraw(g,A,W,H,1,.66,.5,0);END.geo=G;
+    glOK=sceneDraw(G,t,W,H,hour);
+    if(!glOK){coverDraw(g,A,W,H,1,.66,.5,1);if(hour.k>0)coverDraw(g,Bi,W,H,1,.66,.5,hour.k)}
+    domeLights(g,G,dt,now,hour.n);
+    if(land<1){g.fillStyle=`rgba(238,236,244,${1-land})`;g.fillRect(0,0,W,H)}
+  }
+  if(t<7.4&&!(glOK&&land>0)){g.globalCompositeOperation='destination-over';g.fillStyle='#dcdbe7';g.fillRect(0,0,W,H);g.globalCompositeOperation='source-over'}
+  // 1. falling through the cloud painting
+  const fall=clamp(t/3.4,0,1);
+  if(t<3.6&&land<=0)coverDraw(g,IMG.cloud3,W,H,1+E.in(fall)*1.5,.6,.47,1);
+  // 2. the city appears below through the gaps, rushing up toward us
+  const aer=clamp((t-2.6)/1.2,0,1)*(1-clamp((t-5.4)/.8,0,1));
+  if(aer>0){const as=1+E.in(clamp((t-2.6)/3.6,0,1))*2.4;END.ag=coverDraw(g,IMG.end_aerial,W,H,as,.654,.392,aer)}
+  // 4. near clouds rushing outward past the camera; a dense wall hides the change of view
+  const speed=t<5?.25+fall*.6:t<6.4?.9:Math.max(.1,.9-(t-6.4)*.35);
+  const density=t<6.2?1:clamp(1-(t-6.2)/2.2,0,1);
+  const wi=IMG.wisp;
+  END.wisps.sort((a,b)=>b.z-a.z);
+  for(const w of END.wisps){
+    w.z-=speed*dt*1.4;
+    if(w.z<=.05){if(density<.05){w.dead=1;continue}Object.assign(w,newWisp(1))}
+    if(w.dead)continue;
+    const p=1/w.z,sx=W/2+w.x*W*.5*p,sy=H/2+w.y*H*.5*p,ww=W*.55*w.s*p,wh=ww*wi.height/wi.width;
+    let a=clamp((1-w.z)*1.5,0,1)*clamp(w.z*5,0,1)*density;
+    if(t>4.8&&t<6.4)a=Math.min(1,a*1.7);
+    if(a<.01||sx+ww<0||sx-ww>W||sy+wh<0||sy-wh>H)continue;
+    g.save();g.globalAlpha=a*.7;g.translate(sx,sy);g.rotate(w.rot);if(w.flip)g.scale(-1,1);g.drawImage(wi,-ww/2,-wh/2,ww,wh);g.restore();
+  }
+  if(t>4.9&&t<6.9){g.fillStyle=`rgba(238,236,244,${Math.sin(clamp((t-4.9)/2,0,1)*Math.PI)*.9})`;g.fillRect(0,0,W,H)}
+  // 5. the white light. With a mouse, the reader's pointer is the light; without one, it rests where the
+  //    painting puts the morning star. The title catches it when it comes near.
+  if(t>8&&END.geo){
+    const G=END.geo,sa=clamp((t-8)/2,0,1),tw2=.8+.2*Math.sin(now/700);
+    let sx,sy;const live=HOVER&&PTR.seen;if(live){sx=PTR.x;sy=PTR.y}else{sx=G.ox+.1655*G.w;sy=G.oy+.076*G.h}
+    const soul=$('#soul');soul.style.opacity=(sa*tw2).toFixed(3);soul.style.transform=`translate(${sx}px,${sy}px) scale(${(.92+.08*tw2).toFixed(3)})`;
+    const h1=$('#endtxt h1'),r=h1.getBoundingClientRect(),dx=Math.max(r.left-sx,0,sx-r.right),dy=Math.max(r.top-sy,0,sy-r.bottom);
+    const want=sa*clamp(1-Math.hypot(dx,dy)/170,0,1);END.la=(END.la||0)+(want-(END.la||0))*Math.min(1,dt*7);
+    h1.style.setProperty('--la',END.la.toFixed(3));h1.style.setProperty('--lx',(sx-r.left).toFixed(0)+'px');h1.style.setProperty('--ly',(sy-r.top).toFixed(0)+'px');
+  }
+  // 6. words
+  if(t>9.6&&!END.words){END.words=1;document.body.classList.remove('diving');
+    $('#timehint').textContent=T(HOVER?'timehint':'timehintT');setTimeout(()=>{if(END&&!HOUR.hintDone)$('#timehint').classList.add('on')},4600);
+    $('#endtxt h1').animate([{opacity:0,transform:'translateY(14px)'},{opacity:1,transform:'none'}],{duration:1800,fill:'both',easing:'cubic-bezier(.22,1,.36,1)'});
+    $('#endtxt p').animate([{opacity:0},{opacity:1}],{duration:1800,delay:1300,fill:'both'});
+    const ag=$('#again');ag.animate([{opacity:0},{opacity:1}],{duration:1200,delay:2800,fill:'both'});setTimeout(()=>ag.classList.add('on'),2800);
+  }
+}
+$('#again').addEventListener('click',()=>{
+  endEl.classList.remove('on');endEl.setAttribute('aria-hidden','true');endEl.style.opacity='';
+  for(const x of endEl.querySelectorAll('h1,p,button'))x.getAnimations().forEach(a=>a.cancel());
+  $('#again').classList.remove('on');END=null;HOUR={p:0,target:0,last:0,shown:-1,hintDone:false};$('#timehint').classList.remove('on');$('#timeword').classList.remove('on');$('#soul').style.opacity=0;document.body.classList.remove('diving');$('#endtxt h1').style.setProperty('--la','0');
+  state='desk';layout();createBook(0);placeWrap(0,true);setCam(deskScale());deskhint.style.opacity=1;lamp.moodT=1;
+});
+
+
+/* ---- language: Bahasa Indonesia (as written) or English ---- */
+const UI={
+  id:{desk:'Ketuk buku untuk membukanya',deskM:'Klik buku untuk membukanya',open:'Buka buku',prev:'Halaman sebelumnya',next:'Halaman berikutnya',mute:'Matikan suara',unmute:'Nyalakan suara',
+      hint:'Seret sudut halaman, gulir, atau tekan panah',timehint:'Gulir untuk mengubah waktu',timehintT:'Usap ke atas untuk mengubah waktu',again:'Baca lagi',stage:'Panggung teater kertas: ',fail:'Buku gagal dimuat. Muat ulang halaman.',
+      endp:'Dua puluh satu gram. Cukup ringan untuk naik ke langit, cukup berat untuk menahan sebuah kota selama tiga ratus tahun.',
+      endcv:'Jatuh menembus awan ke kota Sukmaloka yang telah mendarat saat fajar',
+      alt:{cover:'Sampul: Sukmaloka',title:'Halaman judul: Sukmaloka, atau Perihal Berat Sebuah Jiwa',colophon:'Kolofon',back:'Sampul belakang'}},
+  en:{desk:'Tap the book to open it',deskM:'Click the book to open it',open:'Open the book',prev:'Previous page',next:'Next page',mute:'Mute sound',unmute:'Turn sound on',
+      hint:'Drag a page corner, scroll, or use the arrow keys',timehint:'Scroll to change the time of day',timehintT:'Swipe up to change the time of day',again:'Read again',stage:'Paper theatre stage: ',fail:'The book could not be loaded. Please reload the page.',
+      endp:'Twenty-one grams. Light enough to rise to the sky, heavy enough to hold up a city for three hundred years.',
+      endcv:'Falling through the clouds to the city of Sukmaloka, landed at dawn',
+      alt:{cover:'Cover: Sukmaloka',title:'Title page: Sukmaloka, or On the Weight of a Soul',colophon:'Colophon',back:'Back cover'}}};
+let LANG='id';
+try{LANG=localStorage.getItem('suk-lang')||''}catch(e){LANG=''}
+if(LANG!=='id'&&LANG!=='en')LANG=/^id\b|^ms\b/i.test(navigator.language||'')?'id':'en';
+const T=k=>UI[LANG][k];
+function setLang(l,save){
+  LANG=l;document.documentElement.lang=l;
+  for(const p of document.querySelectorAll('.page.tx[data-n]')){const pp=p.querySelector('.pp');if(p.__id==null)p.__id=pp.innerHTML;
+    pp.innerHTML=l==='en'?EN_ED.pages[p.dataset.n]:p.__id}
+  for(const im of document.querySelectorAll('.page img[data-k]')){if(im.__id==null){im.__id=im.getAttribute('src');im.__alt=im.alt}
+    const en=ASSET['pg_'+im.dataset.k+'_en'];im.src=(l==='en'&&en)?en:im.__id;const a=UI[l].alt[im.dataset.k];if(a!=null)im.alt=a}
+  for(const p of document.querySelectorAll('.page.th[data-scene]')){const n=+p.dataset.scene,ti=l==='en'?EN_ED.titles[n]:(p.__idt??=p.dataset.title);
+    const cv=p.querySelector('canvas');if(cv)cv.setAttribute('aria-label',T('stage')+ti);if(p.__stage)p.__stage.title=ti}
+  $('#deskhint-t').textContent=T(HOVER?'deskM':'desk');opener.setAttribute('aria-label',T('open'));
+  prevB.setAttribute('aria-label',T('prev'));nextB.setAttribute('aria-label',T('next'));sndB.setAttribute('aria-label',T(SND.on?'mute':'unmute'));
+  $('#endtxt p').textContent=T('endp');$('#again').textContent=T('again');ecv.setAttribute('aria-label',T('endcv'));
+  for(const bt of document.querySelectorAll('#lang button'))bt.setAttribute('aria-pressed',bt.dataset.l===l?'true':'false');
+  if(book){update();if(pageW)fitText()}
+  if(save){try{localStorage.setItem('suk-lang',l)}catch(e){}}
+}
+for(const bt of document.querySelectorAll('#lang button'))bt.addEventListener('click',e=>{e.stopPropagation();if(bt.dataset.l!==LANG){play('click',.35);setLang(bt.dataset.l,true)}});
+
+/* ---- boot ---- */
+let rT=0;
+addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(()=>{
+  if(state==='ending')return;
+  const i=curIndex();layout();createBook(i);placeWrap(i,true);
+  if(state==='desk')setCam(deskScale());else{setCam(1);fitText()}
+},200)});
+async function boot(){
+  makeGrain();
+  for(const p of document.querySelectorAll('.page.tx'))p.style.backgroundImage=`url(${ASSET.paper})`;
+  await loadImages();
+  try{await Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,2500))])}catch(e){}
+  layout();
+  if(!window.St||!St.PageFlip){deskhint.textContent=T('fail');return}
+  createBook(0);setLang(LANG,false);placeWrap(0,true);setCam(deskScale());
+  requestAnimationFrame(loop);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.add('ready')));
+  if(!reduce){setCam(deskScale()*.94);requestAnimationFrame(()=>requestAnimationFrame(()=>setCam(deskScale(),2400,'cubic-bezier(.22,1,.36,1)')))}
+}
+boot();
+window.__suk={get book(){return book},openBook,ending,setLang,skipEnd:()=>{if(END){END.t0=performance.now()-12000*END.D;END.last=0}},stages:()=>stages,state:()=>state,lamp};
+})();
+</script>
+</body>
+</html>
